@@ -1,5 +1,7 @@
 {
   "name": "library-watcher",
+  "version": "1.0.0",
+  "description": "A robust file indexing and management tool designed to track, mark, and centralize resources scattered across multiple disks, featuring intelligent duplicate detection and a modern Nuxt dashboard.",
   "author": "Mrdhnto",
   "type": "module",
   "scripts": {
