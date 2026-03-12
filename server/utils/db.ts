@@ -40,6 +40,15 @@ export const getDb = () => {
       )
     `);
     db.exec(`
+      CREATE TABLE IF NOT EXISTS scan_job_duplicates (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        job_id INTEGER NOT NULL,
+        filepath TEXT NOT NULL,
+        filename TEXT NOT NULL,
+        FOREIGN KEY (job_id) REFERENCES scan_jobs (id) ON DELETE CASCADE
+      )
+    `);
+    db.exec(`
       CREATE TABLE IF NOT EXISTS file_metadata (
         file_id INTEGER PRIMARY KEY,
         is_deleted BOOLEAN DEFAULT 0,

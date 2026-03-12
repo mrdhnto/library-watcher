@@ -13,6 +13,18 @@ const isActioning = ref(false)
 const isDeleteModalOpen = ref(false)
 const deleteFromDisk = ref(false)
 
+// Scan Select state
+const isScanSelectModalOpen = ref(false)
+const scanSelectPath = ref('')
+const scanSelectResults = ref<any[]>([])
+const scanSelectSelected = ref<any[]>([])
+const isScanSelectLoading = ref(false)
+const scanSelectError = ref('')
+const scanSelectScannedCount = ref(0)
+const isScanSelectDeleteModalOpen = ref(false)
+const scanSelectDeleteFromDisk = ref(false)
+const isScanSelectActioning = ref(false)
+
 const columns = [
   { id: 'select', header: '', size: 40 },
   { accessorKey: 'filename', header: 'File Name', size: 300 },
@@ -117,6 +129,98 @@ const bulkActions = [
     }
   ]
 ]
+
+// Scan Select functions
+const openScanSelectModal = () => {
+  isScanSelectModalOpen.value = true
+  scanSelectPath.value = ''
+  scanSelectResults.value = []
+  scanSelectSelected.value = []
+  scanSelectError.value = ''
+  scanSelectScannedCount.value = 0
+}
+
+const performScanSelect = async () => {
+  if (!scanSelectPath.value.trim()) return
+
+  isScanSelectLoading.value = true
+  scanSelectError.value = ''
+  scanSelectResults.value = []
+  scanSelectSelected.value = []
+
+  try {
+    const data = await $fetch('/api/files/scan-match', {
+      method: 'POST',
+      body: { path: scanSelectPath.value.trim() }
+    }) as any
+
+    scanSelectResults.value = data.matches || []
+    scanSelectScannedCount.value = data.scannedCount || 0
+    // Default select all
+    scanSelectSelected.value = [...scanSelectResults.value]
+  } catch (err: any) {
+    scanSelectError.value = err.data?.message || err.statusMessage || err.message || 'Failed to scan directory'
+  } finally {
+    isScanSelectLoading.value = false
+  }
+}
+
+const openScanSelectDeleteModal = () => {
+  if (!scanSelectSelected.value.length) return
+  isScanSelectDeleteModalOpen.value = true
+}
+
+const performScanSelectAction = async (action: 'delete' | 'upload', value: boolean, fromDisk = false) => {
+  if (!scanSelectSelected.value.length) return
+
+  isScanSelectActioning.value = true
+  scanSelectError.value = ''
+
+  try {
+    const fileIds = scanSelectSelected.value.map((r: any) => r.id)
+    await $fetch('/api/files/action', {
+      method: 'POST',
+      body: { fileIds, action, value, deleteFromDisk: fromDisk }
+    })
+
+    // Remove actioned items from results
+    const actionedIds = new Set(fileIds)
+    scanSelectResults.value = scanSelectResults.value.filter((r: any) => !actionedIds.has(r.id))
+    scanSelectSelected.value = []
+    isScanSelectDeleteModalOpen.value = false
+    scanSelectDeleteFromDisk.value = false
+
+    // Refresh main table
+    await fetchFiles()
+  } catch (err: any) {
+    scanSelectError.value = err.data?.message || err.message || `Failed to perform ${action} action`
+  } finally {
+    isScanSelectActioning.value = false
+  }
+}
+
+const scanSelectBulkActions = [
+  [
+    {
+      label: 'Mark as Uploaded',
+      icon: 'i-lucide-cloud-upload',
+      onSelect: () => performScanSelectAction('upload', true)
+    },
+    {
+      label: 'Remove Uploaded Mark',
+      icon: 'i-lucide-cloud-off',
+      onSelect: () => performScanSelectAction('upload', false)
+    }
+  ],
+  [
+    {
+      label: 'Mark as Deleted (Hide)',
+      icon: 'i-lucide-trash-2',
+      color: 'error' as const,
+      onSelect: openScanSelectDeleteModal
+    }
+  ]
+]
 </script>
 
 <template>
@@ -139,6 +243,14 @@ const bulkActions = [
           v-model="showDuplicatesOnly" 
           label="Show duplicates only" 
         />
+        <UButton
+          icon="i-lucide-folder-search"
+          color="neutral"
+          variant="outline"
+          @click="openScanSelectModal"
+        >
+          Select by Scan
+        </UButton>
       </div>
     </div>
 
@@ -279,6 +391,196 @@ const bulkActions = [
                 color="error" 
                 :loading="isActioning"
                 @click="performBulkAction('delete', true, deleteFromDisk)"
+              >
+                Proceed
+              </UButton>
+            </div>
+          </template>
+        </UCard>
+      </template>
+    </UModal>
+
+    <!-- Scan Select Modal -->
+    <UModal v-model:open="isScanSelectModalOpen">
+      <template #header>
+        <div class="flex items-center justify-between w-full">
+          <div class="flex items-center gap-2">
+            <UIcon name="i-lucide-folder-search" class="w-5 h-5 text-primary" />
+            <h3 class="font-bold text-lg text-gray-900 dark:text-white">Select by Folder Scan</h3>
+          </div>
+          <UButton
+            color="neutral"
+            variant="ghost"
+            icon="i-lucide-x"
+            @click="isScanSelectModalOpen = false"
+          />
+        </div>
+      </template>
+
+      <template #body>
+        <div class="space-y-4">
+          <!-- Path Input -->
+          <div class="flex gap-2">
+            <UInput
+              v-model="scanSelectPath"
+              placeholder="Enter folder path to scan..."
+              icon="i-lucide-folder"
+              class="flex-1"
+              @keyup.enter="performScanSelect"
+            />
+            <UButton
+              color="primary"
+              :loading="isScanSelectLoading"
+              @click="performScanSelect"
+              :disabled="!scanSelectPath.trim()"
+            >
+              Scan
+            </UButton>
+          </div>
+
+          <!-- Error -->
+          <div v-if="scanSelectError" class="p-3 text-sm text-red-500 bg-red-50 dark:bg-red-950/30 rounded-lg">
+            {{ scanSelectError }}
+          </div>
+
+          <!-- Loading -->
+          <div v-if="isScanSelectLoading" class="flex flex-col items-center justify-center py-8 gap-2">
+            <UIcon name="i-lucide-loader-2" class="w-6 h-6 animate-spin text-primary" />
+            <p class="text-sm text-gray-500">Scanning directory and matching files...</p>
+          </div>
+
+          <!-- Results -->
+          <div v-else-if="scanSelectScannedCount > 0" class="space-y-3">
+            <!-- Summary -->
+            <div class="flex items-center justify-between text-sm">
+              <p class="text-gray-500">
+                Found <span class="font-semibold text-primary">{{ scanSelectResults.length }}</span>
+                matching files out of
+                <span class="font-semibold">{{ scanSelectScannedCount }}</span> scanned.
+              </p>
+              <div v-if="scanSelectResults.length > 0" class="flex items-center gap-3">
+                <span v-if="scanSelectSelected.length" class="text-primary font-medium">
+                  {{ scanSelectSelected.length }} selected
+                </span>
+                <UDropdownMenu v-if="scanSelectSelected.length" :items="scanSelectBulkActions">
+                  <UButton
+                    color="primary"
+                    variant="solid"
+                    size="sm"
+                    trailing-icon="i-lucide-chevron-down"
+                    :loading="isScanSelectActioning"
+                  >
+                    Actions
+                  </UButton>
+                </UDropdownMenu>
+              </div>
+            </div>
+
+            <!-- No matches -->
+            <div
+              v-if="scanSelectResults.length === 0"
+              class="text-center py-8 text-gray-500 border border-dashed rounded-lg"
+            >
+              <UIcon name="i-lucide-search-x" class="w-8 h-8 mx-auto mb-2 opacity-50" />
+              <p>No matching files found in the database.</p>
+            </div>
+
+            <!-- Results List -->
+            <div
+              v-else
+              class="max-h-[400px] overflow-y-auto border border-gray-200 dark:border-gray-800 rounded-lg divide-y divide-gray-100 dark:divide-gray-800"
+            >
+              <!-- Select All Header -->
+              <div class="flex items-center gap-3 px-3 py-2 bg-gray-50 dark:bg-gray-900/50 sticky top-0 z-10">
+                <UCheckbox
+                  :model-value="scanSelectSelected.length > 0 && scanSelectSelected.length === scanSelectResults.length"
+                  :indeterminate="scanSelectSelected.length > 0 && scanSelectSelected.length < scanSelectResults.length"
+                  @update:model-value="(val) => scanSelectSelected = val ? [...scanSelectResults] : []"
+                />
+                <span class="text-xs font-medium text-gray-500">Select All</span>
+              </div>
+
+              <!-- File Items -->
+              <div
+                v-for="file in scanSelectResults"
+                :key="file.id"
+                class="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors cursor-pointer"
+                @click="() => {
+                  const idx = scanSelectSelected.findIndex((s: any) => s.id === file.id)
+                  if (idx >= 0) scanSelectSelected.splice(idx, 1)
+                  else scanSelectSelected.push(file)
+                }"
+              >
+                <UCheckbox
+                  :model-value="scanSelectSelected.some((s: any) => s.id === file.id)"
+                  @click.stop
+                  @update:model-value="(val) => {
+                    if (val) scanSelectSelected.push(file)
+                    else scanSelectSelected = scanSelectSelected.filter((s: any) => s.id !== file.id)
+                  }"
+                />
+                <div class="flex-1 min-w-0">
+                  <p class="font-medium text-sm text-gray-900 dark:text-gray-100 truncate">{{ file.filename }}</p>
+                  <p class="text-xs text-gray-500 truncate">{{ file.filepath }}</p>
+                </div>
+                <div class="flex items-center gap-2 shrink-0">
+                  <span class="text-xs text-gray-400">{{ formatSize(file.size) }}</span>
+                  <UIcon
+                    v-if="file.is_uploaded"
+                    name="i-lucide-cloud-check"
+                    class="w-4 h-4 text-success"
+                    title="Uploaded"
+                  />
+                  <UBadge v-if="file.duplicate_count > 0" color="error" variant="soft" size="sm">Dup</UBadge>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </template>
+    </UModal>
+
+    <!-- Scan Select Delete Confirmation Modal -->
+    <UModal v-model:open="isScanSelectDeleteModalOpen">
+      <template #content>
+        <UCard :ui="{ body: 'space-y-4' }">
+          <template #header>
+            <div class="flex items-center gap-2 text-error font-semibold">
+              <UIcon name="i-lucide-alert-triangle" class="w-5 h-5" />
+              Confirm Deletion
+            </div>
+          </template>
+
+          <p>Are you sure you want to delete <strong>{{ scanSelectSelected.length }}</strong> file(s) from the list?</p>
+
+          <div class="max-h-[200px] overflow-y-auto border border-gray-100 dark:border-gray-800 rounded bg-gray-50 dark:bg-gray-800/50 p-2 text-sm">
+            <ul class="space-y-1">
+              <li v-for="file in scanSelectSelected" :key="file.id" class="truncate flex items-center gap-2">
+                <UIcon name="i-lucide-file" class="w-3 h-3 text-gray-400" />
+                {{ file.filename }}
+              </li>
+            </ul>
+          </div>
+
+          <div class="pt-2">
+            <UCheckbox
+              v-model="scanSelectDeleteFromDisk"
+              label="Delete files also from disk"
+              color="error"
+            />
+            <div v-if="scanSelectDeleteFromDisk" class="mt-2 p-3 bg-red-50 dark:bg-red-950/30 border border-red-100 dark:border-red-900/50 rounded-lg text-xs text-red-600 dark:text-red-400">
+              <UIcon name="i-lucide-alert-octagon" class="inline-block w-3 h-3 mr-1 mb-0.5" />
+              <strong class="uppercase font-bold">Warning:</strong> This action cannot be undone. Clicking proceed will <strong>permanently delete</strong> the files from your storage device.
+            </div>
+          </div>
+
+          <template #footer>
+            <div class="flex justify-end gap-3">
+              <UButton color="neutral" variant="ghost" @click="isScanSelectDeleteModalOpen = false">Cancel</UButton>
+              <UButton
+                color="error"
+                :loading="isScanSelectActioning"
+                @click="performScanSelectAction('delete', true, scanSelectDeleteFromDisk)"
               >
                 Proceed
               </UButton>
