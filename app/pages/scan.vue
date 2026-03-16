@@ -4,6 +4,8 @@ import { useRouter } from 'vue-router'
 
 const router = useRouter()
 const targetDir = ref('')
+const isSync = ref(false)
+const levelOneOnly = ref(false)
 const isDispatching = ref(false)
 const errorMsg = ref('')
 
@@ -19,7 +21,11 @@ const startScanJob = async () => {
   try {
     const response = await $fetch('/api/scan', {
       method: 'POST',
-      body: { path: targetDir.value }
+      body: { 
+        path: targetDir.value,
+        isSync: isSync.value,
+        levelOneOnly: levelOneOnly.value
+      }
     })
     
     // Redirect to queue immediately after task successfully dispatched
@@ -59,9 +65,25 @@ const startScanJob = async () => {
             placeholder="e.g. D:\MyFiles or /Users/name/Documents" 
             icon="i-lucide-folder"
             size="lg"
+            class="w-full"
             :disabled="isDispatching"
           />
         </UFormGroup>
+
+        <div class="flex flex-col gap-4 p-4 border rounded-xl border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/20 mt-4">
+          <UCheckbox
+            v-model="isSync"
+            label="Synchronous Scan"
+            description="Queue this job and only run one synchronous job at a time."
+            :disabled="isDispatching"
+          />
+          <UCheckbox
+            v-model="levelOneOnly"
+            label="Don't scan inside folders"
+            description="Scan only the first level of the target directory without entering sub-folders."
+            :disabled="isDispatching"
+          />
+        </div>
 
         <div class="flex justify-end gap-3">
           <UButton variant="ghost" color="neutral" to="/">Cancel</UButton>

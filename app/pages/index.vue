@@ -127,6 +127,15 @@ onMounted(() => {
         View All Files
       </UButton>
       <UButton 
+        to="/explorer" 
+        size="lg" 
+        variant="soft" 
+        icon="i-lucide-list-todo" 
+        class="flex-1 max-w-xs justify-center"
+      >
+        Explorer Mode
+      </UButton>
+      <UButton 
         to="/queue" 
         size="lg" 
         variant="outline" 

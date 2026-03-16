@@ -36,9 +36,23 @@ export const getDb = () => {
         duplicates_found INTEGER DEFAULT 0,
         started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         completed_at DATETIME,
-        error_message TEXT
+        error_message TEXT,
+        is_sync BOOLEAN DEFAULT 0,
+        level_one_only BOOLEAN DEFAULT 0
       )
     `);
+
+    try {
+      db.exec('ALTER TABLE scan_jobs ADD COLUMN is_sync BOOLEAN DEFAULT 0');
+    } catch (e) {
+      // Ignore if column already exists
+    }
+    try {
+      db.exec('ALTER TABLE scan_jobs ADD COLUMN level_one_only BOOLEAN DEFAULT 0');
+    } catch (e) {
+      // Ignore if column already exists
+    }
+
     db.exec(`
       CREATE TABLE IF NOT EXISTS scan_job_duplicates (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
