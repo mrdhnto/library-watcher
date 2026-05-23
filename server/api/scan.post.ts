@@ -27,11 +27,9 @@ async function scanDirectory(dir: string): Promise<string[]> {
   return files
 }
 
-// Background scanner function
 async function processScanJob(jobId: number, targetDir: string) {
   const db = getDb()
   try {
-    // 1. Scan directory for all files
     db.prepare('UPDATE scan_jobs SET status = ? WHERE id = ?').run('scanning_dir', jobId)
     const allFiles = await scanDirectory(targetDir)
 
@@ -47,40 +45,31 @@ async function processScanJob(jobId: number, targetDir: string) {
 
         const filename = path.basename(filePath)
 
-        // Check if exact filename already exists in the entire db
         const existingByName = db.prepare('SELECT id FROM files WHERE filename = ?').get(filename) as any
 
         if (existingByName) {
-          // Exact filename exists, don't hash to save resources
           db.prepare('INSERT INTO scan_job_duplicates (job_id, filepath, filename) VALUES (?, ?, ?)').run(jobId, filePath, filename)
           duplicatesFound++
-
-          // Update scan progress
           db.prepare('UPDATE scan_jobs SET scanned_files = ?, duplicates_found = ? WHERE id = ?').run(i + 1, duplicatesFound, jobId)
-          continue // Move to the next file immediately
+          continue
         }
 
         const fileHash = await calculateHash(filePath)
 
-        // Determine if this is an exact match we've seen before
         const existingExact = db.prepare('SELECT * FROM files WHERE filepath = ? AND filename = ? AND hash = ?').get(filePath, filename, fileHash) as any
 
         if (existingExact) {
-          // Exact same file already exists. Check if it's a duplicate of OTHERS.
           const otherInstances = db.prepare('SELECT COUNT(*) as count FROM files WHERE hash = ? AND id != ?').get(fileHash, existingExact.id) as any
           if (otherInstances && otherInstances.count > 0) {
             db.prepare('INSERT INTO scan_job_duplicates (job_id, filepath, filename) VALUES (?, ?, ?)').run(jobId, filePath, filename)
             duplicatesFound++
           }
         } else {
-          // Something changed or it's new
-          // Check if the content (hash) exists elsewhere
           const duplicateRecord = db.prepare('SELECT id FROM files WHERE hash = ?').get(fileHash) as any
           if (duplicateRecord) {
             duplicatesFound++
           }
 
-          // Check if we need to update or insert
           const recordByPath = db.prepare('SELECT id FROM files WHERE filepath = ?').get(filePath) as any
           if (recordByPath) {
             db.prepare('UPDATE files SET filename = ?, size = ?, hash = ?, scanned_at = CURRENT_TIMESTAMP WHERE id = ?')
@@ -90,32 +79,27 @@ async function processScanJob(jobId: number, targetDir: string) {
           }
         }
 
-        // Check if job was terminated
         const currentJob = db.prepare('SELECT status FROM scan_jobs WHERE id = ?').get(jobId) as any
         if (currentJob?.status === 'terminated') {
-          console.log(`Job ${jobId} terminated by user.`)
-          return // Stop processing
+          return
         }
 
-        // Update progress
         db.prepare('UPDATE scan_jobs SET scanned_files = ?, duplicates_found = ? WHERE id = ?').run(i + 1, duplicatesFound, jobId)
       } catch (fileErr) {
         console.error(`Error processing file ${filePath}:`, fileErr)
-        // Continue with next file
       }
     }
 
-    // Mark as completed
     db.prepare(`
-        UPDATE scan_jobs 
-        SET status = 'completed', completed_at = CURRENT_TIMESTAMP 
-        WHERE id = ?
+      UPDATE scan_jobs
+      SET status = 'completed', completed_at = CURRENT_TIMESTAMP
+      WHERE id = ?
     `).run(jobId)
   } catch (error: any) {
     db.prepare(`
-        UPDATE scan_jobs 
-        SET status = 'error', error_message = ?, completed_at = CURRENT_TIMESTAMP 
-        WHERE id = ?
+      UPDATE scan_jobs
+      SET status = 'error', error_message = ?, completed_at = CURRENT_TIMESTAMP
+      WHERE id = ?
     `).run(error.message || 'Unknown error', jobId)
   }
 }
@@ -140,15 +124,13 @@ export default defineEventHandler(async (event) => {
 
   const db = getDb()
 
-  // Insert initial job record
   const result = db.prepare(`
-    INSERT INTO scan_jobs (target_path, status) 
+    INSERT INTO scan_jobs (target_path, status)
     VALUES (?, ?)
   `).run(targetDir, 'pending')
 
   const jobId = result.lastInsertRowid as number
 
-  // We intentionally do not await this function so it runs in background
   processScanJob(jobId, targetDir as string).catch(console.error)
 
   return {

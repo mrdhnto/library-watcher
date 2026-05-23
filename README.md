@@ -6,32 +6,36 @@
 [![SQLite](https://img.shields.io/badge/SQLite-Better--SQLite3-003B57?logo=sqlite&logoColor=white)](https://github.com/WiseLibs/better-sqlite3)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**Library Watcher** is a centralizing indexing and tracking system designed for studio environments where media assets, projects, and source files are often scattered across multiple disks and storage devices.
+**Library Watcher** is a centralizing indexing and tracking system for studio environments where media assets, projects, and source files are scattered across multiple disks and storage devices.
 
 ## 🚀 The Goal
 
-In a professional studio setting, resources are frequently fragmented. **Library Watcher** aims to solve this by providing a single, unified interface to:
-- **Index & Track:** Scan multiple disks and directories to create a centralized database of all your assets.
-- **Centralize Metadata:** Mark and organize files regardless of their physical location on your "RIG".
-- **Intelligent Detection:** Identify duplicate files using SHA-256 hashing to save space and maintain organization.
-- **Monitor Progress:** Track background scanning jobs and resource usage through an intuitive dashboard.
+In a professional studio setting, resources are frequently fragmented. **Library Watcher** provides a single unified interface to:
+- **Index & Track** — Scan multiple disks and directories to build a centralized SQLite database of all your assets.
+- **Browse by Folder** — Navigate scanned files using an explorer-style tree view with breadcrumbs, infinite scroll, search, sort, and right-click context menus.
+- **Detect Duplicates** — Identify identical files via SHA-256 hashing with per-file counts, matching filenames, and aggregated waste statistics.
+- **Manage Metadata** — Mark files as uploaded or deleted (soft delete) with bulk operations and per-file action modals (open location, copy path, upload, hide).
+- **Search Globally** — Search across the entire library by filename, filepath, or hash from a dedicated search page with paginated results.
+- **Monitor Scans** — Track background scanning jobs with real-time progress bars, status badges, ETA, and duplicate reporting.
 
 ## ✨ Features
 
-- 🖥️ **Modern Dashboard:** Real-time overview of total files, storage size, and wasted space.
-- 📂 **Flexible Scanning:** Add any directory path to the scan queue.
-- ⚡ **Background Processing:** Multi-threaded scanning and hashing that doesn't block the UI.
-- 🔍 **Duplicate Finder:** Automatic detection of identical files based on content, not just filenames.
-- 📋 **Job Management:** Track the status of every scan, including progress and error reporting.
-- 🎨 **Premium UI:** Built with Nuxt UI and Tailwind CSS for a sleek, responsive experience.
+- 🖥️ **Dashboard** — Real-time stats: total files, storage size, uploaded count, duplicates found, and wasted space. Quick-action links to all major pages.
+- 📂 **Explorer Mode** — Folder-tree browser with volume detection, breadcrumb navigation, search + sort + duplicates-only filter, file type icons (80+ extension-to-icon mappings), New/Dup badges, right-click context menu (upload, copy path, open location, details, delete), infinite scroll (25 files per page), and animated action modal with inline delete confirmation.
+- 🔍 **Global Search** — Dedicated `/search` page with full-text search across filename, filepath, and SHA-256 hash, paginated results with file type icons and duplicate badges.
+- 📋 **Files Table** — Paginated, searchable table with duplicate-only filter, multi-select bulk actions (mark uploaded/deleted with optional disk deletion), and "scan & match" modal for batch folder operations.
+- ⚡ **Background Scanning** — Non-blocking scan jobs with SHA-256 hashing, duplicate detection, progress tracking (scanning_dir → hashing → completed), and job termination.
+- 📊 **Job Queue** — Active job progress with status badges, progress bars, inline duplicate lists, ETA display. Searchable scan history with detail modals, error messages, and pagination.
+- 🎨 **Dark Mode** — Built-in light/dark theme toggle via Nuxt UI.
+- ⌨️ **UX Polish** — Escape key to close modals (with back-navigation from delete confirm), right-click context menus, copy-path-to-clipboard, open-file-in-explorer integration.
 
 ## 🛠️ Technical Stack
 
-- **Framework:** [Nuxt 4](https://nuxt.com) (Vue.js 3)
-- **UI Components:** [Nuxt UI](https://ui.nuxt.com) & [Lucide Icons](https://lucide.dev)
+- **Framework:** [Nuxt 4](https://nuxt.com) (Vue.js 3 + Nitro server engine)
+- **UI Library:** [Nuxt UI](https://ui.nuxt.com) & [Lucide Icons](https://lucide.dev)
 - **Styling:** [Tailwind CSS 4](https://tailwindcss.com)
-- **Database:** [Better SQLite3](https://github.com/WiseLibs/better-sqlite3) for high-performance local storage
-- **Backend:** Nuxt Server Engine (H3)
+- **Database:** [Better SQLite3](https://github.com/WiseLibs/better-sqlite3) with indexes on `files(hash)` and `files(filename)`
+- **Backend:** H3 endpoints with SQLite
 
 ## 🏁 Getting Started
 
@@ -41,35 +45,29 @@ In a professional studio setting, resources are frequently fragmented. **Library
 
 ### Installation
 ```bash
-# Clone the repository
 git clone https://github.com/Mrdhnto/library-watcher.git
-
-# Install dependencies
+cd library-watcher
 pnpm install
 ```
 
 ### Development
 ```bash
-# Start the development server
 pnpm dev
 ```
 
 ### Production
 ```bash
-# Build the application
 pnpm build
-
-# Preview the build
 pnpm preview
 ```
 
 ## 🤝 Open Source & Contributions
 
-This project is **open-source** and I welcome anyone to use, modify, or improve it! Whether you're a fellow studio worker or a curious developer, your contributions are highly appreciated.
+This project is **open-source**. Contributions, issues, and feature ideas are all welcome.
 
 - Found a bug? Open an [Issue](https://github.com/Mrdhnto/library-watcher/issues).
 - Have a feature idea? Start a [Discussion](https://github.com/Mrdhnto/library-watcher/discussions).
-- Want to contribute code? Feel free to submit a [Pull Request](https://github.com/Mrdhnto/library-watcher/pulls).
+- Want to contribute code? Submit a [Pull Request](https://github.com/Mrdhnto/library-watcher/pulls).
 
 ---
 

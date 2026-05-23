@@ -71,6 +71,10 @@ export const getDb = () => {
         FOREIGN KEY (file_id) REFERENCES files (id) ON DELETE CASCADE
       )
     `);
+
+    // Performance indexes
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_files_hash ON files(hash)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_files_filename ON files(filename)`);
   }
   return db;
 };

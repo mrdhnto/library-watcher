@@ -117,29 +117,38 @@ onMounted(() => {
     </div>
 
     <div class="mt-8 flex justify-center gap-4">
-      <UButton 
-        to="/files" 
-        size="lg" 
-        variant="soft" 
-        icon="i-lucide-folder-open" 
+      <UButton
+        to="/files"
+        size="lg"
+        variant="soft"
+        icon="i-lucide-folder-open"
         class="flex-1 max-w-xs justify-center"
       >
         View All Files
       </UButton>
-      <UButton 
-        to="/explorer" 
-        size="lg" 
-        variant="soft" 
-        icon="i-lucide-list-todo" 
+      <UButton
+        to="/explorer"
+        size="lg"
+        variant="soft"
+        icon="i-lucide-list-todo"
         class="flex-1 max-w-xs justify-center"
       >
         Explorer Mode
       </UButton>
-      <UButton 
-        to="/queue" 
-        size="lg" 
-        variant="outline" 
-        icon="i-lucide-list-todo" 
+      <UButton
+        to="/search"
+        size="lg"
+        variant="soft"
+        icon="i-lucide-search"
+        class="flex-1 max-w-xs justify-center"
+      >
+        Search
+      </UButton>
+      <UButton
+        to="/queue"
+        size="lg"
+        variant="outline"
+        icon="i-lucide-list-todo"
         class="flex-1 max-w-xs justify-center"
       >
         Scan Queue
