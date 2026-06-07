@@ -67,12 +67,15 @@ pnpm preview
 
 ## 🌐 Remote Clients
 
-Library Watcher supports remote scanning via a lightweight CLI client. This lets you index machines
-that can't run the full web server — the server runs centrally, and each machine connects to it.
+Library Watcher is **self-hosted** — you run the server on your own machine or studio server.
+Remote scanning lets you index machines that can't run the full web server — the server runs
+centrally on your network, and each client machine connects to it via WebSocket.
+Both the server and clients must have network connectivity to each other.
 
 ### How it works
 
 1. **Generate a token** — In the web UI, go to Clients → Generate Token → copy the one-time token.
+   > **Prerequisite:** Your Library Watcher server must be running and reachable from the client machine over your network.
 2. **Connect a machine** — On the target machine, run:
    ```bash
    lw-client -u ws://your-server:8080/api/client/ws -t <token>
