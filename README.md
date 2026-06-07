@@ -26,6 +26,8 @@ In a professional studio setting, resources are frequently fragmented. **Library
 - 📋 **Files Table** — Paginated, searchable table with duplicate-only filter, multi-select bulk actions (mark uploaded/deleted with optional disk deletion), and "scan & match" modal for batch folder operations.
 - ⚡ **Background Scanning** — Non-blocking scan jobs with SHA-256 hashing, duplicate detection, progress tracking (scanning_dir → hashing → completed), and job termination.
 - 📊 **Job Queue** — Active job progress with status badges, progress bars, inline duplicate lists, ETA display. Searchable scan history with detail modals, error messages, and pagination.
+- 🌐 **Remote Clients** — Connect external machines via WebSocket with token-based auth. Dispatch scans to remote clients from the web UI — clients scan locally and stream results back.
+- 📋 **Client Management** — Dedicated `/clients` page to view connected clients (hostname, IP, status), rename aliases, kick clients, and manage one-time-use auth tokens.
 - 🎨 **Dark Mode** — Built-in light/dark theme toggle via Nuxt UI.
 - ⌨️ **UX Polish** — Escape key to close modals (with back-navigation from delete confirm), right-click context menus, copy-path-to-clipboard, open-file-in-explorer integration.
 
@@ -36,6 +38,8 @@ In a professional studio setting, resources are frequently fragmented. **Library
 - **Styling:** [Tailwind CSS 4](https://tailwindcss.com)
 - **Database:** [Better SQLite3](https://github.com/WiseLibs/better-sqlite3) with indexes on `files(hash)` and `files(filename)`
 - **Backend:** H3 endpoints with SQLite
+- **WebSocket:** CrossWS (H3) for real-time remote client communication
+- **Client CLI:** Standalone Node.js app ([`client-app/`](client-app/)) using `ws` + `commander`
 
 ## 🏁 Getting Started
 
@@ -60,6 +64,81 @@ pnpm dev
 pnpm build
 pnpm preview
 ```
+
+## 🌐 Remote Clients
+
+Library Watcher supports remote scanning via a lightweight CLI client. This lets you index machines
+that can't run the full web server — the server runs centrally, and each machine connects to it.
+
+### How it works
+
+1. **Generate a token** — In the web UI, go to Clients → Generate Token → copy the one-time token.
+2. **Connect a machine** — On the target machine, run:
+   ```bash
+   lw-client -u ws://your-server:8080/api/client/ws -t <token>
+   ```
+3. **Token is claimed** — The first machine that connects with that token claims it (bound by hostname).
+   That same machine can always reconnect, even after reboots:
+   ```bash
+   lw-client connect
+   ```
+4. **Scan remotely** — In the web UI, go to Scan → switch to "Remote Client" → pick the client → enter path.
+   The client scans the directory locally, hashes files, and streams results back to the server.
+
+### Token lifecycle
+
+| State | Meaning |
+|-------|---------|
+| **Unclaimed** | Never used. Available for first client. |
+| **Claimed** | Bound to a specific hostname. Only that PC can use it. |
+| **Revoked** | Admin disabled the token. Client can no longer connect. |
+
+- Tokens are **one-time-use**: first hostname to connect owns it.
+- A different PC cannot use a claimed token — generate a new one.
+- Revoke a token from the Clients page to free it.
+
+### Client CLI
+
+The client is in the [`lw-client`](https://github.com/Mrdhnto/lw-client) standalone repo. Requires only Node.js — no database or web server dependencies.
+
+```bash
+# Install globally
+npm install -g git+https://github.com/mrdhnto/lw-client.git
+
+# First-time setup
+lw-client -u ws://your-server:8080/api/client/ws -t <token>
+
+# Reconnect after restart
+lw-client connect
+
+# Run without installing
+npx github:mrdhnto/lw-client -u <url> -t <token>
+```
+
+#### Options
+
+| Flag | Alias | Description |
+|------|-------|-------------|
+| `--url <url>` | `-u` | WebSocket server URL |
+| `--token <token>` | `-t` | Authentication token |
+
+#### Commands
+
+| Command | Description |
+|---------|-------------|
+| `connect` | Reconnect using saved configuration (`~/.lw-client.json`)
+
+### API endpoints
+
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| `GET` | `/api/clients` | List all clients with connection status |
+| `POST` | `/api/clients/:id/rename` | Change client display alias |
+| `POST` | `/api/clients/:id/kick` | Disconnect and kick a client |
+| `GET` | `/api/clients/tokens` | List auth tokens |
+| `POST` | `/api/clients/tokens` | Generate a new token |
+| `DELETE` | `/api/clients/tokens/:id` | Revoke a token |
+| `WS` | `/api/client/ws` | WebSocket endpoint for remote clients |
 
 ## 🤝 Open Source & Contributions
 

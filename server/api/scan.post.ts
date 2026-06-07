@@ -3,6 +3,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { pipeline } from 'node:stream/promises'
 import { getDb } from '../utils/db'
+import { connectedClients } from '../utils/ws-clients'
 
 async function calculateHash(filePath: string): Promise<string> {
   const hash = createHash('sha256')
@@ -107,6 +108,7 @@ async function processScanJob(jobId: number, targetDir: string) {
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
   const targetDir = body?.path
+  const clientId = body?.clientId
 
   if (!targetDir || typeof targetDir !== 'string') {
     throw createError({
@@ -115,6 +117,52 @@ export default defineEventHandler(async (event) => {
     })
   }
 
+  // Remote scan via connected client
+  if (clientId) {
+    const db = getDb()
+    const levelOneOnly = body?.levelOneOnly || false
+    const isSync = body?.isSync || false
+
+    const entry = connectedClients.get(clientId)
+    if (!entry) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: 'Client is not connected'
+      })
+    }
+
+    const result = db.prepare(`
+      INSERT INTO scan_jobs (target_path, status, client_id, is_sync, level_one_only)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(targetDir, 'pending', clientId, isSync ? 1 : 0, levelOneOnly ? 1 : 0)
+
+    const jobId = result.lastInsertRowid as number
+
+    try {
+      entry.peer.send(JSON.stringify({
+        type: 'scan',
+        taskId: jobId,
+        path: targetDir,
+        levelOneOnly
+      }))
+    } catch {
+      db.prepare('UPDATE scan_jobs SET status = ?, error_message = ?, completed_at = CURRENT_TIMESTAMP WHERE id = ?').run('error', 'Failed to send scan command to client', jobId)
+      throw createError({
+        statusCode: 502,
+        statusMessage: 'Failed to send scan command to client'
+      })
+    }
+
+    return {
+      jobId,
+      targetDir,
+      status: 'pending',
+      clientId,
+      message: 'Remote scan dispatched to client'
+    }
+  }
+
+  // Local scan (existing logic)
   if (!fs.existsSync(targetDir)) {
     throw createError({
       statusCode: 404,

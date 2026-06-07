@@ -38,7 +38,8 @@ export const getDb = () => {
         completed_at DATETIME,
         error_message TEXT,
         is_sync BOOLEAN DEFAULT 0,
-        level_one_only BOOLEAN DEFAULT 0
+        level_one_only BOOLEAN DEFAULT 0,
+        client_id TEXT
       )
     `);
 
@@ -49,6 +50,11 @@ export const getDb = () => {
     }
     try {
       db.exec('ALTER TABLE scan_jobs ADD COLUMN level_one_only BOOLEAN DEFAULT 0');
+    } catch (e) {
+      // Ignore if column already exists
+    }
+    try {
+      db.exec('ALTER TABLE scan_jobs ADD COLUMN client_id TEXT');
     } catch (e) {
       // Ignore if column already exists
     }
@@ -71,6 +77,45 @@ export const getDb = () => {
         FOREIGN KEY (file_id) REFERENCES files (id) ON DELETE CASCADE
       )
     `);
+
+    // Client tokens for remote CLI auth
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS client_tokens (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        token TEXT NOT NULL UNIQUE,
+        label TEXT,
+        is_active BOOLEAN DEFAULT 1,
+        claimed_by TEXT,
+        claimed_at DATETIME,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    try {
+      db.exec('ALTER TABLE client_tokens ADD COLUMN claimed_by TEXT');
+    } catch (e) { }
+    try {
+      db.exec('ALTER TABLE client_tokens ADD COLUMN claimed_at DATETIME');
+    } catch (e) { }
+
+    // Connected remote clients
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS clients (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id TEXT NOT NULL UNIQUE,
+        name TEXT NOT NULL,
+        token TEXT NOT NULL,
+        hostname TEXT NOT NULL DEFAULT '',
+        status TEXT NOT NULL DEFAULT 'connected',
+        ip_address TEXT,
+        last_heartbeat DATETIME,
+        connected_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    try {
+      db.exec('ALTER TABLE clients ADD COLUMN hostname TEXT NOT NULL DEFAULT \'\'');
+    } catch (e) { }
 
     // Performance indexes
     db.exec(`CREATE INDEX IF NOT EXISTS idx_files_hash ON files(hash)`);

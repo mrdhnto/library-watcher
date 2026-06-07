@@ -30,6 +30,10 @@ const links = computed(() => [{
   label: 'Scan',
   icon: 'i-lucide-search',
   to: '/scan'
+}, {
+  label: 'Clients',
+  icon: 'i-lucide-monitor',
+  to: '/clients'
 }])
 </script>
 

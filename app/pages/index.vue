@@ -153,6 +153,15 @@ onMounted(() => {
       >
         Scan Queue
       </UButton>
+      <UButton
+        to="/clients"
+        size="lg"
+        variant="outline"
+        icon="i-lucide-monitor"
+        class="flex-1 max-w-xs justify-center"
+      >
+        Remote Clients
+      </UButton>
     </div>
   </UContainer>
 </template>

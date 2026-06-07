@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Library Watcher - Your studio assets, unified.</title>
+  <meta name="description" content="A centralizing indexing and tracking system for studio environments where media assets, projects, and source files are scattered across multiple disks." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet" />
+  <link rel="icon" href="https://library-watcher.luminix-studio.my.id/favicon.ico" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <nav class="navbar" id="navbar">
+    <div class="container nav-inner">
+      <a href="#" class="nav-brand">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M16 6v2" /><path d="M18 6v2" /><path d="M14 6v2" /><path d="M4 6h2" /><path d="M4 10h2" /><path d="M4 14h2" /><path d="M4 18h2" />
+          <path d="M20 6h-6" /><path d="M20 10h-6" /><path d="M20 14h-6" /><path d="M20 18h-6" /><path d="M8 6h2" /><path d="M8 10h2" /><path d="M8 14h2" /><path d="M8 18h2" />
+          <path d="M12 6h2" /><path d="M12 10h2" /><path d="M12 14h2" /><path d="M12 18h2" />
+        </svg>
+        <span>Library Watcher</span>
+      </a>
+      <button class="nav-toggle" id="navToggle" aria-label="Toggle menu">
+        <span></span><span></span><span></span>
+      </button>
+      <ul class="nav-links" id="navLinks">
+        <li><a href="#features" class="nav-link">Features</a></li>
+        <li><a href="#docs" class="nav-link">Docs</a></li>
+        <li><a href="#faq" class="nav-link">FAQ</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <section class="hero">
+    <div class="hero-grid"></div>
+    <div class="container hero-inner">
+      <div class="hero-badge">v1.0.0 - Open Source &middot; MIT</div>
+      <h1 class="hero-title">
+        <svg class="hero-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M16 6v2" /><path d="M18 6v2" /><path d="M14 6v2" /><path d="M4 6h2" /><path d="M4 10h2" /><path d="M4 14h2" /><path d="M4 18h2" />
+          <path d="M20 6h-6" /><path d="M20 10h-6" /><path d="M20 14h-6" /><path d="M20 18h-6" /><path d="M8 6h2" /><path d="M8 10h2" /><path d="M8 14h2" /><path d="M8 18h2" />
+          <path d="M12 6h2" /><path d="M12 10h2" /><path d="M12 14h2" /><path d="M12 18h2" />
+        </svg>
+        Library Watcher
+      </h1>
+      <p class="hero-tagline">Your studio assets, unified.</p>
+      <p class="hero-desc">A centralizing indexing and tracking system for studio environments where media assets, projects, and source files are scattered across multiple disks and storage devices.</p>
+      <div class="hero-actions">
+        <a href="https://github.com/Mrdhnto/library-watcher" class="btn btn-primary" target="_blank" rel="noopener">View on GitHub</a>
+        <a href="#docs" class="btn btn-ghost">Get Started &darr;</a>
+      </div>
+    </div>
+  </section>
+
+  <section id="features" class="section">
+    <div class="container">
+      <h2 class="section-title">Everything you need to manage your assets</h2>
+      <p class="section-sub">From scanning drives to detecting duplicates, one unified dashboard.</p>
+      <div class="features-grid">
+
+        <div class="feature-card reveal">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+            </svg>
+          </div>
+          <h3>Index &amp; Track</h3>
+          <p>Scan multiple disks and directories to build a centralized SQLite database of all your assets.</p>
+        </div>
+
+        <div class="feature-card reveal">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+            </svg>
+          </div>
+          <h3>Browse by Folder</h3>
+          <p>Navigate your scanned files using an explorer-style tree view with breadcrumbs, search, and sort.</p>
+        </div>
+
+        <div class="feature-card reveal">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/>
+            </svg>
+          </div>
+          <h3>Duplicate Detection</h3>
+          <p>Identify identical files via SHA-256 hashing, grouped and reported across the dashboard and file views.</p>
+        </div>
+
+        <div class="feature-card reveal">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+            </svg>
+          </div>
+          <h3>Manage Metadata</h3>
+          <p>Mark files as uploaded or deleted (soft delete) with bulk operations and per-file action modals.</p>
+        </div>
+
+        <div class="feature-card reveal">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+            </svg>
+          </div>
+          <h3>Background Scanning</h3>
+          <p>Non-blocking scan jobs with SHA-256 hashing, duplicate detection, progress tracking, and job termination.</p>
+        </div>
+
+        <div class="feature-card reveal">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+              <rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+            </svg>
+          </div>
+          <h3>Job Queue</h3>
+          <p>Active job progress with status badges, progress bars, collapsible duplicate lists, and searchable history.</p>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <section id="purpose" class="section section-alt">
+    <div class="container">
+      <h2 class="section-title">Why Library Watcher?</h2>
+      <div class="purpose-content reveal">
+        <p>In a professional studio setting, resources are frequently fragmented. Media assets on one drive, projects on another, source files on a NAS. Keeping track of what you have, where it lives, and whether duplicates exist becomes a full-time job.</p>
+        <p><strong>Library Watcher</strong> solves this by providing a single, unified interface that indexes everything across all your storage. Browse by folder, search across the entire database, detect duplicates by content hash, and manage file lifecycle. All from one clean dashboard.</p>
+      </div>
+      <div class="stats-grid reveal">
+        <div class="stat-card">
+          <span class="stat-value">SHA-256</span>
+          <span class="stat-label">Content Hashing</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value">SQLite</span>
+          <span class="stat-label">Local Database</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value">Background</span>
+          <span class="stat-label">Non-blocking Scans</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value">MIT</span>
+          <span class="stat-label">Open Source</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="docs" class="section">
+    <div class="container">
+      <h2 class="section-title">Get started in minutes</h2>
+      <p class="section-sub">Clone, install, scan. You'll be browsing your assets in no time.</p>
+
+      <div class="steps reveal">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div>
+            <h3>Clone &amp; Install</h3>
+            <div class="code-block">
+              <code>git clone https://github.com/Mrdhnto/library-watcher.git<br/>cd library-watcher<br/>pnpm install</code>
+            </div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div>
+            <h3>Start the Dev Server</h3>
+            <div class="code-block">
+              <code>pnpm dev</code>
+            </div>
+            <p class="step-note">Open <a href="http://localhost:3000" target="_blank" rel="noopener">http://localhost:3000</a> in your browser.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div>
+            <h3>Scan a Directory</h3>
+            <p>Navigate to the <strong>Scan</strong> page, enter a directory path, and start indexing. The scan runs in the background with real-time progress.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">4</div>
+          <div>
+            <h3>Browse &amp; Manage</h3>
+            <p>Use the <strong>Explorer</strong> to navigate scanned folders, the <strong>Files</strong> table for advanced search and bulk actions, and the <strong>Dashboard</strong> for an overview of your entire library.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section section-tech">
+    <div class="container">
+      <h2 class="section-title">Built with modern technology</h2>
+      <div class="tech-stack reveal">
+        <span class="tech-badge">Nuxt 4</span>
+        <span class="tech-badge">Vue 3</span>
+        <span class="tech-badge">SQLite</span>
+        <span class="tech-badge">Tailwind CSS</span>
+        <span class="tech-badge">SHA-256</span>
+        <span class="tech-badge">Lucide Icons</span>
+        <span class="tech-badge">TypeScript</span>
+        <span class="tech-badge">H3 Endpoints</span>
+      </div>
+    </div>
+  </section>
+
+  <section id="faq" class="section">
+    <div class="container">
+      <h2 class="section-title">Frequently asked questions</h2>
+      <div class="faq-list reveal">
+
+        <div class="faq-item">
+          <button class="faq-question" aria-expanded="false">
+            <span>What is Library Watcher?</span>
+            <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </button>
+          <div class="faq-answer">
+            <p>Library Watcher is a file indexing and management tool designed for studio environments. It scans multiple disks and directories, builds a centralized SQLite database, and provides a web dashboard to browse, search, and manage all your assets.</p>
+          </div>
+        </div>
+
+        <div class="faq-item">
+          <button class="faq-question" aria-expanded="false">
+            <span>How does duplicate detection work?</span>
+            <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </button>
+          <div class="faq-answer">
+            <p>Each scanned file is hashed using SHA-256. Files with identical hashes are grouped and reported as duplicates. The dashboard shows wasted space, and the file views let you compare and manage duplicate groups.</p>
+          </div>
+        </div>
+
+        <div class="faq-item">
+          <button class="faq-question" aria-expanded="false">
+            <span>What storage systems are supported?</span>
+            <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </button>
+          <div class="faq-answer">
+            <p>Any locally mounted drive. NTFS, ext4, APFS, network shares, external USB drives. If your OS can see it, Library Watcher can scan it.</p>
+          </div>
+        </div>
+
+        <div class="faq-item">
+          <button class="faq-question" aria-expanded="false">
+            <span>Does Library Watcher delete or move files?</span>
+            <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </button>
+          <div class="faq-answer">
+            <p>No. Library Watcher uses <strong>soft delete</strong> (you can also check to delete the real file), it flags files in the database without touching the filesystem. You can always revert or review before taking any real action.</p>
+          </div>
+        </div>
+
+        <div class="faq-item">
+          <button class="faq-question" aria-expanded="false">
+            <span>Can I run multiple scans at once?</span>
+            <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </button>
+          <div class="faq-answer">
+            <p>Yes. Scans run as background jobs with real-time progress tracking. You can queue multiple scans, monitor each one independently, and terminate them if needed.</p>
+          </div>
+        </div>
+
+        <div class="faq-item">
+          <button class="faq-question" aria-expanded="false">
+            <span>Is it open source?</span>
+            <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </button>
+          <div class="faq-answer">
+            <p>Absolutely. Library Watcher is MIT-licensed and available on <a href="https://github.com/Mrdhnto/library-watcher" target="_blank" rel="noopener">GitHub</a>. Contributions, issues, and feature ideas are all welcome.</p>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="container footer-inner">
+      <div class="footer-brand">
+        <svg class="footer-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M16 6v2" /><path d="M18 6v2" /><path d="M14 6v2" /><path d="M4 6h2" /><path d="M4 10h2" /><path d="M4 14h2" /><path d="M4 18h2" />
+          <path d="M20 6h-6" /><path d="M20 10h-6" /><path d="M20 14h-6" /><path d="M20 18h-6" /><path d="M8 6h2" /><path d="M8 10h2" /><path d="M8 14h2" /><path d="M8 18h2" />
+          <path d="M12 6h2" /><path d="M12 10h2" /><path d="M12 14h2" /><path d="M12 18h2" />
+        </svg>
+        Library Watcher
+      </div>
+      <p class="footer-text">
+        Built with &hearts; by <a href="https://github.com/Mrdhnto" target="_blank" rel="noopener">Mrdhnto</a>
+        &middot; Part of <a href="https://luminix-studio.my.id" target="_blank" rel="noopener">Luminix Studio</a>
+        &middot; MIT License
+      </p>
+      <div class="footer-links">
+        <a href="https://github.com/Mrdhnto/library-watcher" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://github.com/Mrdhnto/library-watcher/issues" target="_blank" rel="noopener">Issues</a>
+        <a href="https://github.com/Mrdhnto/library-watcher/discussions" target="_blank" rel="noopener">Discussions</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
