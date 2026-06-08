@@ -9,8 +9,7 @@ export default defineWebSocketHandler({
   },
 
   async open(peer) {
-    // Wait for handshake message — store nothing until authenticated
-    peer.context = { authenticated: false }
+    peer.context.authenticated = false
   },
 
   async message(peer, message) {

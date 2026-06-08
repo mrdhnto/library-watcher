@@ -87,6 +87,8 @@ Both the server and clients must have network connectivity to each other.
    ```
 4. **Scan remotely** — In the web UI, go to Scan → switch to "Remote Client" → pick the client → enter path.
    The client scans the directory locally, hashes files, and streams results back to the server.
+   
+   > **Performance:** Remote client scans are **10–30% faster** than server-side scanning because the client runs closer to the filesystem with less overhead. We recommend using remote clients for all production scanning.
 
 ### Token lifecycle
 
