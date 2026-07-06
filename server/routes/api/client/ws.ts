@@ -1,9 +1,50 @@
 import { defineWebSocketHandler } from 'h3'
 import { getDb } from '../../../utils/db'
 import { connectedClients } from '../../../utils/ws-clients'
-import { hashPassword } from '../../../utils/auth'
 import { insertFileFormat } from '../../../utils/heatmap'
-import { randomUUID, randomBytes } from 'node:crypto'
+import { verifyAccessToken } from '../../../utils/jwt'
+import { z } from 'zod'
+
+// Zod schemas for incoming messages
+const handshakeSchema = z.object({
+  type: z.literal('handshake'),
+  token: z.string()
+})
+
+const pingSchema = z.object({
+  type: z.literal('ping')
+})
+
+const scanProgressSchema = z.object({
+  type: z.literal('scan-progress'),
+  taskId: z.number(),
+  scanned: z.number(),
+  total: z.number().optional(),
+  currentFile: z.string().optional()
+})
+
+const scanCompleteSchema = z.object({
+  type: z.literal('scan-complete'),
+  taskId: z.number(),
+  files: z.array(z.object({
+    filename: z.string(),
+    filepath: z.string(),
+    size: z.number(),
+    hash: z.string()
+  })).max(5000, "Maximum of 5000 files per chunk allowed to prevent memory exhaustion")
+})
+
+const scanErrorSchema = z.object({
+  type: z.literal('scan-error'),
+  taskId: z.number(),
+  message: z.string()
+})
+
+const scanStatusSchema = z.object({
+  type: z.literal('scan-status'),
+  taskId: z.number(),
+  status: z.string()
+})
 
 export default defineWebSocketHandler({
   async upgrade(_request) {
@@ -12,6 +53,8 @@ export default defineWebSocketHandler({
 
   async open(peer) {
     peer.context.authenticated = false
+    peer.context.rateLimitBucket = 50 // initial burst allowed
+    peer.context.lastRateLimitCheck = Date.now()
   },
 
   async message(peer, message) {
@@ -24,122 +67,49 @@ export default defineWebSocketHandler({
       return
     }
 
+    // --- Rate Limiting ---
+    const now = Date.now()
+    const timePassed = now - peer.context.lastRateLimitCheck
+    peer.context.lastRateLimitCheck = now
+    
+    // Refill bucket at 20 tokens per second, max 50
+    peer.context.rateLimitBucket = Math.min(50, peer.context.rateLimitBucket + (timePassed / 1000) * 20)
+    peer.context.rateLimitBucket -= 1
+    
+    if (peer.context.rateLimitBucket < 0) {
+      peer.send(JSON.stringify({ type: 'error', message: 'Rate limit exceeded' }))
+      return // Drop message
+    }
+
     // --- Handshake (unauthenticated only) ---
     if (!peer.context.authenticated) {
-      if (msg.type !== 'handshake') {
-        peer.send(JSON.stringify({ type: 'error', message: 'Handshake required' }))
+      const parsed = handshakeSchema.safeParse(msg)
+      if (!parsed.success) {
+        peer.send(JSON.stringify({ type: 'error', message: 'Invalid handshake payload' }))
         peer.close()
         return
       }
 
-      const token = msg.token
-      const hostname = msg.hostname || 'unknown'
+      const payload = await verifyAccessToken(parsed.data.token)
+      if (!payload) {
+        peer.send(JSON.stringify({ type: 'error', message: 'Invalid or expired access token' }))
+        peer.close()
+        return
+      }
+
+      const clientId = payload.clientId as string
+      const hostname = payload.hostname as string
       const ipAddress = peer.remoteAddress || ''
 
-      // Validate token exists + is active
-      const tokenRecord = db.prepare('SELECT id, claimed_by, user_id FROM client_tokens WHERE token = ? AND is_active = 1').get(token) as any
-      if (!tokenRecord) {
-        peer.send(JSON.stringify({ type: 'error', message: 'Invalid or inactive token' }))
-        peer.close()
-        return
-      }
-
-      // Token claim check: first use or reconnection by same hostname
-      if (tokenRecord.claimed_by && tokenRecord.claimed_by !== hostname) {
-        peer.send(JSON.stringify({ type: 'error', message: `Token already claimed by ${tokenRecord.claimed_by}. Generate a new token.` }))
-        peer.close()
-        return
-      }
-
-      // Claim token on first use
-      if (!tokenRecord.claimed_by) {
-        db.prepare('UPDATE client_tokens SET claimed_by = ?, claimed_at = CURRENT_TIMESTAMP WHERE id = ?').run(hostname, tokenRecord.id)
-      }
-
-      // Temp user auto-provisioning: ensure a temp user exists for this hostname
-      let tempCreds: { username: string; password: string } | null = null
-      let boundUserId = tokenRecord.user_id || null
-
-      function ensureTempUser(hostname: string, preferredId: number | null): { id: number; creds: { username: string; password: string } } {
-        // 1. Find existing temp user by hostname (any status)
-        const byName = db.prepare('SELECT id, is_active FROM users WHERE username = ? AND is_temp = 1').get(hostname) as any
-
-        let userId: number
-        if (byName) {
-          // Reactivate if needed
-          userId = byName.id
-          if (!byName.is_active) {
-            db.prepare('UPDATE users SET is_active = 1 WHERE id = ?').run(userId)
-          }
-        } else if (preferredId) {
-          // 2. Check if the bound user is a deactivated temp user
-          const byId = db.prepare('SELECT id, is_temp FROM users WHERE id = ?').get(preferredId) as any
-          if (byId?.is_temp) {
-            userId = byId.id
-            db.prepare('UPDATE users SET is_active = 1, username = ? WHERE id = ?').run(hostname, userId)
-          } else {
-            // 3. Bound user was deleted or is a permanent user — create fresh
-            const result = db.prepare('INSERT INTO users (username, password_hash, role, is_active, is_temp) VALUES (?, ?, ?, ?, ?)').run(hostname, '', 'user', 1, 1)
-            userId = result.lastInsertRowid as number
-          }
-        } else {
-          // 4. No preferred user — create fresh
-          const result = db.prepare('INSERT INTO users (username, password_hash, role, is_active, is_temp) VALUES (?, ?, ?, ?, ?)').run(hostname, '', 'user', 1, 1)
-          userId = result.lastInsertRowid as number
-        }
-
-        // Generate fresh password
-        const rawPassword = randomBytes(12).toString('base64url').slice(0, 16)
-        const pwHash = hashPassword(rawPassword)
-        db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(pwHash, userId)
-
-        return { id: userId, creds: { username: hostname, password: rawPassword } }
-      }
-
-      if (!boundUserId) {
-        // Token has no user bound — provision temp user
-        const result = ensureTempUser(hostname, null)
-        boundUserId = result.id
-        db.prepare('UPDATE client_tokens SET user_id = ? WHERE id = ?').run(boundUserId, tokenRecord.id)
-        tempCreds = result.creds
-      } else {
-        // Token has a bound user — check if usable
-        const boundUser = db.prepare('SELECT id, is_temp FROM users WHERE id = ? AND is_active = 1').get(boundUserId) as any
-        if (!boundUser) {
-          // Bound user was deactivated/deleted — provision temp user
-          const result = ensureTempUser(hostname, boundUserId)
-          boundUserId = result.id
-          db.prepare('UPDATE client_tokens SET user_id = ? WHERE id = ?').run(boundUserId, tokenRecord.id)
-          tempCreds = result.creds
-        } else if (boundUser.is_temp === 1) {
-          // Temp user reconnecting — regenerate password
-          const rawPassword = randomBytes(12).toString('base64url').slice(0, 16)
-          const pwHash = hashPassword(rawPassword)
-          db.prepare('UPDATE users SET password_hash = ?, username = ? WHERE id = ?').run(pwHash, hostname, boundUserId)
-          tempCreds = { username: hostname, password: rawPassword }
-        }
-      }
-
-      // Find existing client record for this token+hostname (reconnect case)
-      let clientRecord = db.prepare('SELECT client_id, name FROM clients WHERE token = ? AND hostname = ?').get(token, hostname) as any
-
-      if (!clientRecord) {
-        // First connection — create new record
-        const newClientId = randomUUID()
-        db.prepare('INSERT INTO clients (client_id, name, token, hostname, status, ip_address, last_heartbeat, user_id) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)')
-          .run(newClientId, hostname, token, hostname, 'connected', ipAddress, boundUserId)
-        clientRecord = { client_id: newClientId, name: hostname }
-      } else {
-        // Reconnection — update status, IP, heartbeat, user_id; keep name (admin alias) intact
-        db.prepare('UPDATE clients SET status = ?, ip_address = ?, last_heartbeat = CURRENT_TIMESTAMP, user_id = ? WHERE client_id = ?')
-          .run('connected', ipAddress, boundUserId, clientRecord.client_id)
-      }
+      // Update client status
+      db.prepare('UPDATE clients SET status = ?, ip_address = ?, last_heartbeat = CURRENT_TIMESTAMP WHERE client_id = ?')
+        .run('connected', ipAddress, clientId)
 
       peer.context.authenticated = true
-      peer.context.clientId = clientRecord.client_id
-      connectedClients.set(clientRecord.client_id, { peer, clientData: { clientId: clientRecord.client_id, hostname, ipAddress, token } })
+      peer.context.clientId = clientId
+      connectedClients.set(clientId, { peer, clientData: { clientId, hostname, ipAddress, token: parsed.data.token } })
 
-      peer.send(JSON.stringify({ type: 'handshake-ok', clientId: clientRecord.client_id, hostname, tempCreds }))
+      peer.send(JSON.stringify({ type: 'handshake-ok', clientId, hostname }))
       return
     }
 
@@ -148,19 +118,32 @@ export default defineWebSocketHandler({
 
     switch (msg.type) {
       case 'ping': {
+        const parsed = pingSchema.safeParse(msg)
+        if (!parsed.success) return
         db.prepare('UPDATE clients SET last_heartbeat = CURRENT_TIMESTAMP WHERE client_id = ?').run(clientId)
         peer.send(JSON.stringify({ type: 'pong' }))
         break
       }
 
       case 'scan-progress': {
+        const parsed = scanProgressSchema.safeParse(msg)
+        if (!parsed.success) {
+          peer.send(JSON.stringify({ type: 'error', message: 'Validation failed: ' + parsed.error.errors[0]?.message }))
+          return
+        }
         db.prepare('UPDATE scan_jobs SET scanned_files = ?, status = ? WHERE id = ?')
-          .run(msg.scanned, 'hashing', msg.taskId)
+          .run(parsed.data.scanned, 'hashing', parsed.data.taskId)
         break
       }
 
       case 'scan-complete': {
-        const files: Array<{ filename: string; filepath: string; size: number; hash: string }> = msg.files || []
+        const parsed = scanCompleteSchema.safeParse(msg)
+        if (!parsed.success) {
+          peer.send(JSON.stringify({ type: 'error', message: 'Validation failed: ' + parsed.error.errors[0]?.message }))
+          return
+        }
+        
+        const files = parsed.data.files
         let duplicatesFound = 0
 
         const insertFile = db.prepare('INSERT OR IGNORE INTO files (filename, filepath, size, hash) VALUES (?, ?, ?, ?)')
@@ -173,8 +156,8 @@ export default defineWebSocketHandler({
           const existingByName = db.prepare('SELECT id FROM files WHERE filename = ?').get(f.filename) as any
           if (existingByName) {
             duplicatesFound++
-            db.prepare('INSERT INTO scan_job_duplicates (job_id, filepath, filename) VALUES (?, ?, ?)').run(msg.taskId, f.filepath, f.filename)
-            updateJob.run(i + 1, duplicatesFound, files.length, msg.taskId)
+            db.prepare('INSERT INTO scan_job_duplicates (job_id, filepath, filename) VALUES (?, ?, ?)').run(parsed.data.taskId, f.filepath, f.filename)
+            updateJob.run(i + 1, duplicatesFound, files.length, parsed.data.taskId)
             continue
           }
 
@@ -194,25 +177,29 @@ export default defineWebSocketHandler({
           }
 
           if (existingByHash) {
-            db.prepare('INSERT INTO scan_job_duplicates (job_id, filepath, filename) VALUES (?, ?, ?)').run(msg.taskId, f.filepath, f.filename)
+            db.prepare('INSERT INTO scan_job_duplicates (job_id, filepath, filename) VALUES (?, ?, ?)').run(parsed.data.taskId, f.filepath, f.filename)
           }
 
-          updateJob.run(i + 1, duplicatesFound, files.length, msg.taskId)
+          updateJob.run(i + 1, duplicatesFound, files.length, parsed.data.taskId)
         }
 
         db.prepare('UPDATE scan_jobs SET status = ?, duplicates_found = ?, completed_at = CURRENT_TIMESTAMP WHERE id = ?')
-          .run('completed', duplicatesFound, msg.taskId)
+          .run('completed', duplicatesFound, parsed.data.taskId)
         break
       }
 
       case 'scan-error': {
+        const parsed = scanErrorSchema.safeParse(msg)
+        if (!parsed.success) return
         db.prepare('UPDATE scan_jobs SET status = ?, error_message = ?, completed_at = CURRENT_TIMESTAMP WHERE id = ?')
-          .run('error', msg.message, msg.taskId)
+          .run('error', parsed.data.message, parsed.data.taskId)
         break
       }
 
       case 'scan-status': {
-        db.prepare('UPDATE scan_jobs SET status = ? WHERE id = ?').run(msg.status, msg.taskId)
+        const parsed = scanStatusSchema.safeParse(msg)
+        if (!parsed.success) return
+        db.prepare('UPDATE scan_jobs SET status = ? WHERE id = ?').run(parsed.data.status, parsed.data.taskId)
         break
       }
 

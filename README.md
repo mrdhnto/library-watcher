@@ -78,10 +78,10 @@ Both the server and clients must have network connectivity to each other.
    > **Prerequisite:** Your Library Watcher server must be running and reachable from the client machine over your network.
 2. **Connect a machine** — On the target machine, run:
    ```bash
-   lw-client -u ws://your-server:8080/api/client/ws -t <token>
+   lw-client -u wss://your-server.com/api/client/ws -t <token>
    ```
-3. **Token is claimed** — The first machine that connects with that token claims it (bound by hostname).
-   That same machine can always reconnect, even after reboots:
+3. **Token is claimed** — The first machine that connects with that token claims it (bound by hostname and a secure hardware fingerprint). The CLI exchanges this one-time token for a secure rotating session and stores the credentials safely in your OS **keychain** (using `keytar`).
+   That same machine can always reconnect automatically, even after reboots:
    ```bash
    lw-client connect
    ```
@@ -95,11 +95,12 @@ Both the server and clients must have network connectivity to each other.
 | State | Meaning |
 |-------|---------|
 | **Unclaimed** | Never used. Available for first client. |
-| **Claimed** | Bound to a specific hostname. Only that PC can use it. |
+| **Claimed** | Bound to a specific secure hardware fingerprint. Only that physical PC/VM can use it. |
 | **Revoked** | Admin disabled the token. Client can no longer connect. |
 
-- Tokens are **one-time-use**: first hostname to connect owns it.
-- A different PC cannot use a claimed token — generate a new one.
+- Tokens are **one-time-use**: first hardware ID to connect owns it.
+- Behind the scenes, the static token is exchanged for a secure, short-lived **JWT Access Token** and a long-lived **Refresh Token**.
+- A different PC cannot use a claimed token (even if it spoofs the hostname) — generate a new one.
 - Revoke a token from the Clients page to free it.
 
 ### Client CLI
@@ -110,8 +111,8 @@ The client is in the [`lw-client`](https://github.com/Mrdhnto/lw-client) standal
 # Install globally
 npm install -g git+https://github.com/mrdhnto/lw-client.git
 
-# First-time setup
-lw-client -u ws://your-server:8080/api/client/ws -t <token>
+# First-time setup (use wss:// for production, ws:// for local)
+lw-client -u wss://your-server.com/api/client/ws -t <token>
 
 # Reconnect after restart
 lw-client connect
@@ -143,7 +144,9 @@ npx github:mrdhnto/lw-client -u <url> -t <token>
 | `GET` | `/api/clients/tokens` | List auth tokens |
 | `POST` | `/api/clients/tokens` | Generate a new token |
 | `DELETE` | `/api/clients/tokens/:id` | Revoke a token |
-| `WS` | `/api/client/ws` | WebSocket endpoint for remote clients |
+| `POST` | `/api/client/auth` | Exchange registration token for JWT session |
+| `POST` | `/api/client/refresh` | Refresh an expired JWT session |
+| `WS` | `/api/client/ws` | Secure WebSocket endpoint for remote clients |
 
 ## 🤝 Open Source & Contributions
 
