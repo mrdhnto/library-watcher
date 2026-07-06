@@ -97,6 +97,9 @@ export const getDb = () => {
     try {
       db.exec('ALTER TABLE client_tokens ADD COLUMN claimed_at DATETIME');
     } catch (e) { }
+    try {
+      db.exec('ALTER TABLE client_tokens ADD COLUMN user_id INTEGER REFERENCES users(id)');
+    } catch (e) { }
 
     // Connected remote clients
     db.exec(`
@@ -116,10 +119,59 @@ export const getDb = () => {
     try {
       db.exec('ALTER TABLE clients ADD COLUMN hostname TEXT NOT NULL DEFAULT \'\'');
     } catch (e) { }
+    try {
+      db.exec('ALTER TABLE clients ADD COLUMN user_id INTEGER REFERENCES users(id)');
+    } catch (e) { }
+
+    // Auth tables
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT NOT NULL UNIQUE,
+        password_hash TEXT NOT NULL,
+        password_hint TEXT,
+        role TEXT NOT NULL DEFAULT 'user',
+        is_active INTEGER DEFAULT 1,
+        is_temp INTEGER DEFAULT 0,
+        client_id TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    try {
+      db.exec('ALTER TABLE users ADD COLUMN is_temp INTEGER DEFAULT 0');
+    } catch (e) { }
+    try {
+      db.exec('ALTER TABLE users ADD COLUMN client_id TEXT');
+    } catch (e) { }
+
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS sessions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        token TEXT NOT NULL UNIQUE,
+        expires_at DATETIME NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
 
     // Performance indexes
     db.exec(`CREATE INDEX IF NOT EXISTS idx_files_hash ON files(hash)`);
     db.exec(`CREATE INDEX IF NOT EXISTS idx_files_filename ON files(filename)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at)`);
+
+    // File formats heatmap
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS file_formats (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        file_id INTEGER NOT NULL,
+        extension TEXT NOT NULL,
+        FOREIGN KEY (file_id) REFERENCES files (id) ON DELETE CASCADE
+      )
+    `);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_file_formats_ext ON file_formats(extension)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_file_formats_file ON file_formats(file_id)`);
   }
   return db;
 };

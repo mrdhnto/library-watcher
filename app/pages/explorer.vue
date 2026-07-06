@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 
+const toast = useToast()
+
 interface ExplorerFile {
   id: number
   filename: string
@@ -36,7 +38,6 @@ const fileOffset = ref(0)
 const errorMsg = ref('')
 const FILE_PAGE_SIZE = 25
 
-// Search & Sort
 const searchQuery = ref('')
 const showDuplicatesOnly = ref(false)
 const sortMode = ref<'name_asc' | 'name_desc' | 'date_asc' | 'date_desc' | 'size_asc' | 'size_desc'>('name_asc')
@@ -50,7 +51,6 @@ const sortOptions = [
   { label: 'Size (Desc)', value: 'size_desc' }
 ]
 
-// File action modal
 const isActionModalOpen = ref(false)
 const actionFile = ref<ExplorerFile | null>(null)
 const isActioning = ref(false)
@@ -58,19 +58,16 @@ const actionError = ref('')
 const modalView = ref<'details' | 'delete-confirm'>('details')
 const deleteFromDisk = ref(false)
 
-// Filtered & sorted folders
 const filteredFolders = computed(() => {
   let result = [...folders.value]
   if (searchQuery.value) {
     const q = searchQuery.value.toLowerCase()
     result = result.filter(f => f.toLowerCase().includes(q))
   }
-  // Sort folders by name always
   result.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
   return result
 })
 
-// Filtered & sorted files
 const filteredFiles = computed(() => {
   let result = [...files.value]
   if (searchQuery.value) {
@@ -103,18 +100,20 @@ const filteredFiles = computed(() => {
   return result
 })
 
-// Breadcrumb segments
-const breadcrumbs = computed(() => {
-  if (!currentPath.value) return []
+// Breadcrumb items for UBreadcrumb
+const breadcrumbItems = computed(() => {
+  const items: { label: string, icon?: string, onSelect: () => void }[] = [
+    { label: 'This PC', icon: 'i-lucide-monitor', onSelect: () => navigateTo('') }
+  ]
+  if (!currentPath.value) return items
   const parts = currentPath.value.split('\\').filter(Boolean)
-  const crumbs: { label: string; path: string }[] = []
   for (let i = 0; i < parts.length; i++) {
     const label = parts[i]
     if (!label) continue
     const path = parts.slice(0, i + 1).join('\\')
-    crumbs.push({ label, path })
+    items.push({ label, onSelect: () => navigateTo(path) })
   }
-  return crumbs
+  return items
 })
 
 const isAtRoot = computed(() => !currentPath.value)
@@ -196,7 +195,6 @@ const formatSize = (bytes: number) => {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
 
-// File Actions
 const openActionModal = (file: ExplorerFile) => {
   actionFile.value = file
   actionError.value = ''
@@ -220,16 +218,15 @@ const performAction = async (action: 'delete' | 'upload', value: boolean, fromDi
       }
     })
 
-    // If marked as deleted, remove from local list
     if (action === 'delete' && value) {
       files.value = files.value.filter(f => f.id !== actionFile.value!.id)
     }
-    // If toggled uploaded, update local state
     if (action === 'upload') {
       const f = files.value.find(f => f.id === actionFile.value!.id)
       if (f) f.is_uploaded = value ? 1 : 0
     }
 
+    toast.add({ title: action === 'delete' ? 'File deleted' : value ? 'Marked as uploaded' : 'Upload mark removed', color: 'success', icon: 'i-lucide-check-circle' })
     isActionModalOpen.value = false
     modalView.value = 'details'
     deleteFromDisk.value = false
@@ -272,15 +269,16 @@ const openFileLocation = async (filepath: string) => {
       body: { filepath }
     })
   } catch {
-    // Silently fail — execution was best-effort
+    //
   }
 }
 
 const copyFilePath = async (filepath: string) => {
   try {
     await navigator.clipboard.writeText(filepath)
+    toast.add({ title: 'Path copied to clipboard', color: 'success', icon: 'i-lucide-check-circle' })
   } catch {
-    // Clipboard API may not be available
+    toast.add({ title: 'Failed to copy path', color: 'error', icon: 'i-lucide-alert-circle' })
   }
 }
 
@@ -326,406 +324,403 @@ const onKeyDown = (e: KeyboardEvent) => {
 </script>
 
 <template>
-  <UContainer class="py-8 space-y-6">
-    <!-- Header -->
-    <div class="flex items-center justify-between">
-      <div>
-        <h1 class="text-2xl font-bold bg-gradient-to-r from-primary to-indigo-500 bg-clip-text text-transparent">
-          Explorer
-        </h1>
-        <p class="text-gray-500">Browse your scanned files by folder structure</p>
-      </div>
-    </div>
-
-    <!-- Navigation Bar -->
-    <UCard>
-      <div class="flex items-center gap-2">
-        <!-- Back Button -->
-        <UButton
-          icon="i-lucide-arrow-left"
-          color="neutral"
-          variant="ghost"
-          :disabled="isAtRoot || isLoading"
-          @click="navigateUp"
-          title="Go back"
-        />
-
-        <!-- Home Button -->
-        <UButton
-          icon="i-lucide-hard-drive"
-          color="neutral"
-          variant="ghost"
-          :disabled="isAtRoot || isLoading"
-          @click="navigateTo('')"
-          title="Go to root"
-        />
-
-        <div class="h-6 w-px bg-gray-200 dark:bg-gray-700" />
-
-        <!-- Path Input -->
-        <form @submit.prevent="onPathSubmit" class="flex-1 flex items-center gap-2">
-          <UInput
-            v-model="pathInput"
-            icon="i-lucide-folder"
-            placeholder="Enter a path..."
-            class="flex-1"
-            :disabled="isLoading"
-            @keyup.enter="onPathSubmit"
-          />
-          <UButton
-            type="submit"
-            icon="i-lucide-arrow-right"
-            color="primary"
-            variant="soft"
-            :disabled="isLoading"
-            title="Go"
-          />
-        </form>
-      </div>
-
-      <!-- Breadcrumbs -->
-      <div v-if="breadcrumbs.length" class="flex items-center gap-1 mt-3 text-sm flex-wrap">
-        <button
-          class="text-primary hover:underline font-medium cursor-pointer"
-          @click="navigateTo('')"
-        >
-          <UIcon name="i-lucide-monitor" class="w-4 h-4 inline-block mb-0.5" />
-          This PC
-        </button>
-        <template v-for="(crumb, i) in breadcrumbs" :key="i">
-          <UIcon name="i-lucide-chevron-right" class="w-3 h-3 text-gray-400 shrink-0" />
-          <button
-            class="hover:underline cursor-pointer truncate max-w-[200px]"
-            :class="i === breadcrumbs.length - 1
-              ? 'font-semibold text-gray-900 dark:text-white'
-              : 'text-primary font-medium'"
-            @click="navigateTo(crumb.path)"
-            :title="crumb.path"
-          >
-            {{ crumb.label }}
-          </button>
+  <UDashboardPanel>
+    <template #header>
+      <UDashboardNavbar title="Explorer">
+        <template #leading>
+          <UDashboardSidebarCollapse />
         </template>
-      </div>
-    </UCard>
+      </UDashboardNavbar>
+    </template>
 
-    <!-- Toolbar: Search + Sort (shown when not at root and not loading) -->
-    <div v-if="!isAtRoot && !isLoading" class="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-      <UInput
-        v-model="searchQuery"
-        icon="i-lucide-search"
-        placeholder="Filter files and folders..."
-        class="w-full sm:w-72"
-      />
-      <div class="flex items-center gap-2">
-        <UIcon name="i-lucide-arrow-up-down" class="w-4 h-4 text-gray-400" />
-        <USelect
-          v-model="sortMode"
-          :items="sortOptions"
-          value-key="value"
-          class="w-40"
-        />
-      </div>
-      <UCheckbox
-        v-model="showDuplicatesOnly"
-        label="Show duplicates only"
-      />
-    </div>
+    <template #body>
+      <div class="p-6 space-y-6">
+        <!-- Navigation Bar -->
+        <UCard>
+          <div class="flex items-center gap-2">
+            <UButton
+              icon="i-lucide-arrow-left"
+              color="neutral"
+              variant="ghost"
+              :disabled="isAtRoot || isLoading"
+              title="Go back"
+              @click="navigateUp"
+            />
 
-    <!-- Error State -->
-    <div v-if="errorMsg" class="p-4 text-red-500 bg-red-50 dark:bg-red-950/30 rounded-lg flex items-center gap-2">
-      <UIcon name="i-lucide-alert-circle" class="w-5 h-5 shrink-0" />
-      {{ errorMsg }}
-    </div>
+            <UButton
+              icon="i-lucide-hard-drive"
+              color="neutral"
+              variant="ghost"
+              :disabled="isAtRoot || isLoading"
+              title="Go to root"
+              @click="navigateTo('')"
+            />
 
-    <!-- Loading State -->
-    <div v-if="isLoading" class="flex flex-col items-center justify-center py-16 gap-3">
-      <UIcon name="i-lucide-loader-2" class="w-8 h-8 animate-spin text-primary" />
-      <p class="text-gray-500 text-sm">Loading...</p>
-    </div>
+            <div class="h-6 w-px bg-muted" />
 
-    <!-- Content -->
-    <div v-else-if="!errorMsg">
-      <!-- Root: Volumes View -->
-      <div v-if="isAtRoot && folders.length > 0">
-        <p class="text-sm text-gray-500 mb-4 font-medium">Volumes</p>
-        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-          <button
-            v-for="vol in folders"
-            :key="vol"
-            class="group flex flex-col items-center gap-3 p-5 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 hover:border-primary hover:shadow-md hover:shadow-primary/5 transition-all duration-200 cursor-pointer"
-            @click="navigateTo(vol)"
+            <form
+              class="flex-1 flex items-center gap-2"
+              @submit.prevent="onPathSubmit"
+            >
+              <UInput
+                v-model="pathInput"
+                icon="i-lucide-folder"
+                placeholder="Enter a path..."
+                class="flex-1"
+                :disabled="isLoading"
+                @keyup.enter="onPathSubmit"
+              />
+              <UButton
+                type="submit"
+                icon="i-lucide-arrow-right"
+                color="primary"
+                variant="soft"
+                :disabled="isLoading"
+                title="Go"
+              />
+            </form>
+          </div>
+
+          <div
+            v-if="breadcrumbItems.length > 1"
+            class="mt-3"
           >
-            <div class="p-3 rounded-xl bg-blue-500/10 text-blue-500 group-hover:bg-primary/15 group-hover:text-primary transition-colors">
-              <UIcon name="i-lucide-hard-drive" class="w-8 h-8" />
-            </div>
-            <span class="font-semibold text-sm text-gray-800 dark:text-gray-200 group-hover:text-primary transition-colors">
-              {{ vol }}\
-            </span>
-          </button>
-        </div>
-      </div>
-
-      <!-- Folder & Files View -->
-      <div v-else-if="!isAtRoot">
-        <!-- Folders -->
-        <div v-if="filteredFolders.length > 0" class="mb-6">
-          <p class="text-sm text-gray-500 mb-3 font-medium">
-            Folders
-            <span class="text-gray-400">({{ filteredFolders.length }})</span>
-          </p>
-          <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-            <button
-              v-for="folder in filteredFolders"
-              :key="folder"
-              class="group flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 hover:border-primary hover:shadow-md hover:shadow-primary/5 transition-all duration-200 cursor-pointer text-left"
-              @click="navigateToFolder(folder)"
-              :title="folder"
-            >
-              <div class="p-2 rounded-lg bg-amber-500/10 text-amber-500 group-hover:bg-primary/15 group-hover:text-primary transition-colors shrink-0">
-                <UIcon name="i-lucide-folder" class="w-5 h-5" />
-              </div>
-              <span class="text-sm font-medium text-gray-700 dark:text-gray-300 truncate group-hover:text-primary transition-colors">
-                {{ folder }}
-              </span>
-            </button>
+            <UBreadcrumb :items="breadcrumbItems" />
           </div>
-        </div>
-
-        <!-- Files -->
-        <div v-if="filteredFiles.length > 0">
-          <p class="text-sm text-gray-500 mb-3 font-medium">
-            Files
-            <span class="text-gray-400">({{ files.length }} of {{ totalFiles }})</span>
-          </p>
-          <div class="space-y-1">
-            <UContextMenu
-              v-for="file in filteredFiles"
-              :key="file.id"
-              :items="getFileContextMenuItems(file)"
-            >
-              <div class="flex items-center gap-3 px-4 py-2.5 rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800/60 transition-colors cursor-context-menu">
-                <div class="p-1.5 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-400 shrink-0">
-                  <UIcon :name="fileTypeIcon(file.filename)" class="w-4 h-4" />
-                </div>
-                <div class="flex-1 min-w-0">
-                  <p class="text-sm font-medium text-gray-800 dark:text-gray-200 truncate" :title="file.filename">
-                    {{ file.filename }}
-                  </p>
-                </div>
-                <div class="flex items-center gap-2 shrink-0">
-                  <UIcon
-                    v-if="file.is_uploaded"
-                    name="i-lucide-cloud-check"
-                    class="w-4 h-4 text-success"
-                    title="Uploaded"
-                  />
-                  <UBadge v-if="isRecent(file.scanned_at)" color="success" variant="soft" size="sm">New</UBadge>
-                  <UBadge
-                    v-if="file.duplicate_count > 0"
-                    color="error"
-                    variant="soft"
-                    size="sm"
-                    :title="file.duplicate_with
-                      ? 'Duplicate of: ' + file.duplicate_with
-                      : file.duplicate_count + ' duplicate(s)'"
-                  >
-                    Dup ({{ file.duplicate_count }})
-                  </UBadge>
-                  <span class="text-xs text-gray-400 w-20 text-right">{{ formatSize(file.size) }}</span>
-                </div>
-              </div>
-            </UContextMenu>
-          </div>
-
-          <!-- Sentinel for infinite scroll -->
-          <div ref="sentinel" class="h-4" />
-          <div v-if="loadingMore" class="flex justify-center py-4">
-            <UIcon name="i-lucide-loader-2" class="w-5 h-5 animate-spin text-primary" />
-          </div>
-          <div v-else-if="!hasMore && files.length > 0" class="text-center py-4 text-xs text-gray-400">
-            All {{ totalFiles }} files loaded
-          </div>
-        </div>
-
-        <!-- Empty State (after filter) -->
-        <div
-          v-if="filteredFolders.length === 0 && filteredFiles.length === 0"
-          class="flex flex-col items-center justify-center py-16 text-gray-400"
-        >
-          <UIcon :name="searchQuery ? 'i-lucide-search-x' : 'i-lucide-folder-x'" class="w-12 h-12 mb-3 opacity-50" />
-          <p class="font-medium text-gray-500">
-            {{ searchQuery ? 'No matching files or folders' : 'No files found at this path' }}
-          </p>
-          <p class="text-sm mt-1">
-            {{ searchQuery ? 'Try a different search term' : 'Try navigating to a different folder or scanning this directory first' }}
-          </p>
-        </div>
-      </div>
-
-      <!-- Root Empty State -->
-      <div
-        v-else-if="isAtRoot && folders.length === 0"
-        class="flex flex-col items-center justify-center py-16 text-gray-400"
-      >
-        <UIcon name="i-lucide-database" class="w-12 h-12 mb-3 opacity-50" />
-        <p class="font-medium text-gray-500">No files in database</p>
-        <p class="text-sm mt-1 mb-4">Start by scanning a directory to populate the explorer</p>
-        <UButton to="/scan" icon="i-lucide-search" color="primary">New Scan</UButton>
-      </div>
-    </div>
-
-    <!-- File Action Modal -->
-    <UModal v-model:open="isActionModalOpen">
-      <template #content>
-        <UCard v-if="actionFile">
-          <template #header>
-            <Transition name="fade" mode="out-in">
-              <div v-if="modalView === 'details'" key="h-details" class="flex items-center gap-3">
-                <div class="p-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-500">
-                  <UIcon :name="fileTypeIcon(actionFile.filename)" class="w-5 h-5" />
-                </div>
-                <div class="min-w-0 flex-1">
-                  <h3 class="font-bold text-gray-900 dark:text-white truncate">{{ actionFile.filename }}</h3>
-                  <p class="text-xs text-gray-500 truncate" :title="actionFile.filepath">{{ actionFile.filepath }}</p>
-                </div>
-              </div>
-              <div v-else key="h-delete" class="flex items-center gap-2 text-error font-semibold">
-                <UIcon name="i-lucide-alert-triangle" class="w-5 h-5" />
-                Confirm Deletion
-              </div>
-            </Transition>
-          </template>
-
-          <Transition name="fade" mode="out-in">
-            <!-- Details View -->
-            <div v-if="modalView === 'details'" key="b-details">
-              <div class="space-y-3 mb-5">
-                <div class="flex items-center justify-between text-sm">
-                  <span class="text-gray-500">Size</span>
-                  <span class="font-medium">{{ formatSize(actionFile.size) }}</span>
-                </div>
-                <div class="flex items-center justify-between text-sm">
-                  <span class="text-gray-500">Hash</span>
-                  <span class="font-mono text-xs truncate max-w-[200px]" :title="actionFile.hash">
-                    {{ actionFile.hash.substring(0, 24) }}...
-                  </span>
-                </div>
-                <div class="flex items-center justify-between text-sm">
-                  <span class="text-gray-500">Upload Status</span>
-                  <UBadge :color="actionFile.is_uploaded ? 'success' : 'neutral'" variant="soft" size="sm">
-                    {{ actionFile.is_uploaded ? 'Uploaded' : 'Not Uploaded' }}
-                  </UBadge>
-                </div>
-                <div v-if="actionFile.duplicate_count > 0" class="flex items-center justify-between text-sm">
-                  <span class="text-gray-500">Duplicates</span>
-                  <UBadge color="error" variant="soft" size="sm">{{ actionFile.duplicate_count }} duplicate(s)</UBadge>
-                </div>
-              </div>
-
-              <div class="flex gap-2 mb-4">
-                <UButton
-                  size="sm"
-                  color="neutral"
-                  variant="outline"
-                  icon="i-lucide-folder-open"
-                  @click="openFileLocation(actionFile.filepath)"
-                >
-                  Open Location
-                </UButton>
-                <UButton
-                  size="sm"
-                  color="neutral"
-                  variant="outline"
-                  icon="i-lucide-copy"
-                  @click="copyFilePath(actionFile.filepath)"
-                >
-                  Copy Path
-                </UButton>
-              </div>
-
-              <div v-if="actionError" class="p-3 mb-4 text-sm text-red-500 bg-red-50 dark:bg-red-950/30 rounded-lg">
-                {{ actionError }}
-              </div>
-
-              <div class="space-y-2">
-                <UButton
-                  v-if="!actionFile.is_uploaded"
-                  block
-                  color="primary"
-                  variant="soft"
-                  icon="i-lucide-cloud-upload"
-                  :loading="isActioning"
-                  @click="performAction('upload', true)"
-                >
-                  Mark as Uploaded
-                </UButton>
-                <UButton
-                  v-else
-                  block
-                  color="neutral"
-                  variant="soft"
-                  icon="i-lucide-cloud-off"
-                  :loading="isActioning"
-                  @click="performAction('upload', false)"
-                >
-                  Remove Uploaded Mark
-                </UButton>
-                <UButton
-                  block
-                  color="error"
-                  variant="soft"
-                  icon="i-lucide-trash-2"
-                  :loading="isActioning"
-                  @click="openDeleteConfirm"
-                >
-                  Mark as Deleted (Hide)
-                </UButton>
-              </div>
-            </div>
-
-            <!-- Delete Confirm View -->
-            <div v-else key="b-delete" class="space-y-4">
-              <p>Are you sure you want to delete <strong>{{ actionFile.filename }}</strong> from the list?</p>
-
-              <div>
-                <UCheckbox
-                  v-model="deleteFromDisk"
-                  label="Delete file also from disk"
-                  color="error"
-                />
-                <div v-if="deleteFromDisk" class="mt-2 p-3 bg-red-50 dark:bg-red-950/30 border border-red-100 dark:border-red-900/50 rounded-lg text-xs text-red-600 dark:text-red-400">
-                  <UIcon name="i-lucide-alert-octagon" class="inline-block w-3 h-3 mr-1 mb-0.5" />
-                  <strong class="uppercase font-bold">Warning:</strong> This action cannot be undone. Clicking proceed will <strong>permanently delete</strong> the file from your storage device.
-                </div>
-              </div>
-
-              <div v-if="actionError" class="p-3 text-sm text-red-500 bg-red-50 dark:bg-red-950/30 rounded-lg">
-                {{ actionError }}
-              </div>
-            </div>
-          </Transition>
-
-          <template #footer>
-            <Transition name="fade" mode="out-in">
-              <div v-if="modalView === 'details'" key="f-details" class="flex justify-end">
-                <UButton color="neutral" variant="ghost" @click="isActionModalOpen = false">Close</UButton>
-              </div>
-              <div v-else key="f-delete" class="flex justify-end gap-3">
-                <UButton color="neutral" variant="ghost" @click="cancelDelete">Cancel</UButton>
-                <UButton
-                  color="error"
-                  :loading="isActioning"
-                  @click="performAction('delete', true, deleteFromDisk)"
-                >
-                  Proceed
-                </UButton>
-              </div>
-            </Transition>
-          </template>
         </UCard>
-      </template>
-    </UModal>
-  </UContainer>
+
+        <!-- Toolbar -->
+        <div
+          v-if="!isAtRoot && !isLoading"
+          class="flex flex-col sm:flex-row items-start sm:items-center gap-3"
+        >
+          <UInput
+            v-model="searchQuery"
+            icon="i-lucide-search"
+            placeholder="Filter files and folders..."
+            class="w-full sm:w-72"
+          />
+          <div class="flex items-center gap-2">
+            <UIcon
+              name="i-lucide-arrow-up-down"
+              class="w-4 h-4 text-dimmed"
+            />
+            <USelect
+              v-model="sortMode"
+              :items="sortOptions"
+              value-key="value"
+              class="w-40"
+            />
+          </div>
+          <UCheckbox
+            v-model="showDuplicatesOnly"
+            label="Show duplicates only"
+          />
+        </div>
+
+        <!-- Error State -->
+        <div
+          v-if="errorMsg"
+          class="p-4 text-error bg-error/10 rounded-lg flex items-center gap-2"
+        >
+          <UIcon
+            name="i-lucide-alert-circle"
+            class="w-5 h-5 shrink-0"
+          />
+          {{ errorMsg }}
+        </div>
+
+        <!-- Loading State -->
+        <div
+          v-if="isLoading"
+          class="space-y-3"
+        >
+          <USkeleton class="h-24 w-full" />
+          <USkeleton class="h-16 w-full" />
+          <USkeleton class="h-16 w-full" />
+          <USkeleton class="h-16 w-full" />
+        </div>
+
+        <!-- Content -->
+        <div v-else-if="!errorMsg">
+          <!-- Root: Volumes View -->
+          <div v-if="isAtRoot && folders.length > 0">
+            <p class="text-sm text-muted mb-4 font-medium">
+              Volumes
+            </p>
+            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+              <button
+                v-for="vol in folders"
+                :key="vol"
+                class="group flex flex-col items-center gap-3 p-5 rounded-xl border border-default bg-elevated hover:border-primary hover:shadow-md hover:shadow-primary/5 transition-all duration-200 cursor-pointer"
+                @click="navigateTo(vol)"
+              >
+                <div class="p-3 rounded-xl bg-blue-500/10 text-blue-500 group-hover:bg-primary/15 group-hover:text-primary transition-colors">
+                  <UIcon
+                    name="i-lucide-hard-drive"
+                    class="w-8 h-8"
+                  />
+                </div>
+                <span class="font-semibold text-sm text-toned group-hover:text-primary transition-colors">
+                  {{ vol }}\
+                </span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Folder & Files View -->
+          <div v-else-if="!isAtRoot">
+            <!-- Folders -->
+            <div
+              v-if="filteredFolders.length > 0"
+              class="mb-6"
+            >
+              <p class="text-sm text-muted mb-3 font-medium">
+                Folders
+                <span class="text-dimmed">({{ filteredFolders.length }})</span>
+              </p>
+              <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                <button
+                  v-for="folder in filteredFolders"
+                  :key="folder"
+                  class="group flex items-center gap-3 p-3 rounded-lg border border-default bg-elevated hover:border-primary hover:shadow-md hover:shadow-primary/5 transition-all duration-200 cursor-pointer text-left"
+                  :title="folder"
+                  @click="navigateToFolder(folder)"
+                >
+                  <div class="p-2 rounded-lg bg-amber-500/10 text-amber-500 group-hover:bg-primary/15 group-hover:text-primary transition-colors shrink-0">
+                    <UIcon
+                      name="i-lucide-folder"
+                      class="w-5 h-5"
+                    />
+                  </div>
+                  <span class="text-sm font-medium text-toned truncate group-hover:text-primary transition-colors">
+                    {{ folder }}
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Files -->
+            <div v-if="filteredFiles.length > 0">
+              <p class="text-sm text-muted mb-3 font-medium">
+                Files
+                <span class="text-dimmed">({{ files.length }} of {{ totalFiles }})</span>
+              </p>
+              <div class="space-y-1">
+                <UContextMenu
+                  v-for="file in filteredFiles"
+                  :key="file.id"
+                  :items="getFileContextMenuItems(file)"
+                >
+                  <div class="flex items-center gap-3 px-4 py-2.5 rounded-lg border border-default bg-elevated hover:bg-muted transition-colors cursor-context-menu">
+                    <div class="p-1.5 rounded-md bg-muted text-dimmed shrink-0">
+                      <UIcon
+                        :name="fileTypeIcon(file.filename)"
+                        class="w-4 h-4"
+                      />
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <p
+                        class="text-sm font-medium text-default truncate"
+                        :title="file.filename"
+                      >
+                        {{ file.filename }}
+                      </p>
+                    </div>
+                    <div class="flex items-center gap-2 shrink-0">
+                      <UIcon
+                        v-if="file.is_uploaded"
+                        name="i-lucide-cloud-check"
+                        class="w-4 h-4 text-success"
+                        title="Uploaded"
+                      />
+                      <UBadge
+                        v-if="isRecent(file.scanned_at)"
+                        color="success"
+                        variant="soft"
+                        size="sm"
+                      >
+                        New
+                      </UBadge>
+                      <UBadge
+                        v-if="file.duplicate_count > 0"
+                        color="error"
+                        variant="soft"
+                        size="sm"
+                        :title="file.duplicate_with
+                          ? 'Duplicate of: ' + file.duplicate_with
+                          : file.duplicate_count + ' duplicate(s)'"
+                      >
+                        Dup ({{ file.duplicate_count }})
+                      </UBadge>
+                      <span class="text-xs text-dimmed w-20 text-right">{{ formatSize(file.size) }}</span>
+                    </div>
+                  </div>
+                </UContextMenu>
+              </div>
+
+              <div
+                ref="sentinel"
+                class="h-4"
+              />
+              <div
+                v-if="loadingMore"
+                class="flex justify-center py-4"
+              >
+                <USkeleton class="h-8 w-full max-w-md" />
+              </div>
+              <div
+                v-else-if="!hasMore && files.length > 0"
+                class="text-center py-4 text-xs text-dimmed"
+              >
+                All {{ totalFiles }} files loaded
+              </div>
+            </div>
+
+            <!-- Empty State -->
+            <div
+              v-if="filteredFolders.length === 0 && filteredFiles.length === 0"
+              class="flex flex-col items-center justify-center py-16 text-dimmed"
+            >
+              <UIcon
+                :name="searchQuery ? 'i-lucide-search-x' : 'i-lucide-folder-x'"
+                class="w-12 h-12 mb-3 opacity-50"
+              />
+              <p class="font-medium text-muted">
+                {{ searchQuery ? 'No matching files or folders' : 'No files found at this path' }}
+              </p>
+              <p class="text-sm mt-1">
+                {{ searchQuery ? 'Try a different search term' : 'Try navigating to a different folder or scanning this directory first' }}
+              </p>
+            </div>
+          </div>
+
+          <!-- Root Empty State -->
+          <div
+            v-else-if="isAtRoot && folders.length === 0"
+            class="flex flex-col items-center justify-center py-16 text-dimmed"
+          >
+            <UIcon
+              name="i-lucide-database"
+              class="w-12 h-12 mb-3 opacity-50"
+            />
+            <p class="font-medium text-muted">
+              No files in database
+            </p>
+            <p class="text-sm mt-1 mb-4">
+              Start by scanning a directory to populate the explorer
+            </p>
+            <UButton
+              to="/scan"
+              icon="i-lucide-search"
+              color="primary"
+            >
+              New Scan
+            </UButton>
+          </div>
+        </div>
+
+        <!-- File Action Modal -->
+        <UModal v-model:open="isActionModalOpen">
+          <template #content>
+            <div v-if="actionFile" class="relative overflow-hidden bg-elevated/80 backdrop-blur-2xl border border-default rounded-xl shadow-2xl transition-all duration-300">
+              <!-- Dynamic glowing blobs -->
+              <div class="absolute -top-32 -left-32 w-64 h-64 rounded-full blur-3xl pointer-events-none transition-colors duration-500" :class="modalView === 'delete' ? 'bg-error/20' : 'bg-primary/20'" />
+              <div class="absolute -bottom-32 -right-32 w-64 h-64 rounded-full blur-3xl pointer-events-none transition-colors duration-500" :class="modalView === 'delete' ? 'bg-error/10' : 'bg-blue-500/10'" />
+              
+              <div class="relative z-10 flex flex-col h-full">
+                <div class="flex items-center justify-between p-6 pb-4 border-b border-default/50 transition-colors duration-300" :class="modalView === 'delete' ? 'border-error/10 bg-error/5' : ''">
+                  <Transition name="fade" mode="out-in">
+                    <div v-if="modalView === 'details'" key="h-details" class="flex items-center gap-3">
+                      <div class="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 text-primary shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)] border border-primary/20">
+                        <UIcon :name="fileTypeIcon(actionFile.filename)" class="w-5 h-5" />
+                      </div>
+                      <div class="min-w-0 flex-1">
+                        <h3 class="font-bold text-lg leading-tight tracking-tight text-default truncate">{{ actionFile.filename }}</h3>
+                        <p class="text-xs text-muted font-medium truncate" :title="actionFile.filepath">{{ actionFile.filepath }}</p>
+                      </div>
+                    </div>
+                    <div v-else key="h-delete" class="flex items-center gap-3 text-error">
+                      <div class="flex items-center justify-center w-10 h-10 rounded-xl bg-error/10 border border-error/20">
+                        <UIcon name="i-lucide-alert-triangle" class="w-5 h-5 animate-pulse" />
+                      </div>
+                      <h3 class="font-bold text-lg leading-tight tracking-tight">Confirm Deletion</h3>
+                    </div>
+                  </Transition>
+                  <UButton color="neutral" variant="ghost" icon="i-lucide-x" class="rounded-full hover:bg-default/50 transition-colors" @click="isActionModalOpen = false" />
+                </div>
+                
+                <div class="p-6">
+                  <Transition name="fade" mode="out-in">
+                    <div v-if="modalView === 'details'" key="b-details">
+                      <div class="grid grid-cols-2 gap-4 text-sm bg-muted/30 p-4 rounded-xl border border-default/30 shadow-inner mb-6">
+                        <div>
+                          <p class="text-muted mb-1 text-xs uppercase tracking-wider font-semibold">Size</p>
+                          <p class="font-bold text-default">{{ formatSize(actionFile.size) }}</p>
+                        </div>
+                        <div>
+                          <p class="text-muted mb-1 text-xs uppercase tracking-wider font-semibold">Hash</p>
+                          <p class="font-mono text-xs text-default truncate max-w-[150px]" :title="actionFile.hash">{{ actionFile.hash.substring(0, 24) }}...</p>
+                        </div>
+                        <div>
+                          <p class="text-muted mb-1 text-xs uppercase tracking-wider font-semibold">Status</p>
+                          <UBadge :color="actionFile.is_uploaded ? 'success' : 'neutral'" variant="soft" size="sm" class="shadow-sm">{{ actionFile.is_uploaded ? 'Uploaded' : 'Not Uploaded' }}</UBadge>
+                        </div>
+                        <div>
+                          <p class="text-muted mb-1 text-xs uppercase tracking-wider font-semibold">Duplicates</p>
+                          <UBadge v-if="actionFile.duplicate_count > 0" color="error" variant="soft" size="sm" class="shadow-sm">{{ actionFile.duplicate_count }} found</UBadge>
+                          <span v-else class="text-dimmed">None</span>
+                        </div>
+                      </div>
+
+                      <div class="flex gap-3 mb-6">
+                        <UButton size="sm" color="neutral" variant="soft" icon="i-lucide-folder-open" class="flex-1 justify-center transition-transform hover:scale-[1.02] active:scale-95 shadow-sm" @click="openFileLocation(actionFile.filepath)">Open Location</UButton>
+                        <UButton size="sm" color="neutral" variant="soft" icon="i-lucide-copy" class="flex-1 justify-center transition-transform hover:scale-[1.02] active:scale-95 shadow-sm" @click="copyFilePath(actionFile.filepath)">Copy Path</UButton>
+                      </div>
+
+                      <UAlert v-if="actionError" color="error" variant="soft" :title="actionError" class="mb-4 shadow-inner" />
+
+                      <div class="space-y-3">
+                        <UButton v-if="!actionFile.is_uploaded" block color="primary" class="shadow-lg shadow-primary/20 transition-transform hover:scale-[1.02] active:scale-95" icon="i-lucide-cloud-upload" :loading="isActioning" @click="performAction('upload', true)">Mark as Uploaded</UButton>
+                        <UButton v-else block color="neutral" variant="soft" class="transition-transform hover:scale-[1.02] active:scale-95" icon="i-lucide-cloud-off" :loading="isActioning" @click="performAction('upload', false)">Remove Uploaded Mark</UButton>
+                        <UButton block color="error" variant="soft" class="transition-transform hover:scale-[1.02] active:scale-95 border border-error/20" icon="i-lucide-trash-2" :loading="isActioning" @click="openDeleteConfirm">Mark as Deleted (Hide)</UButton>
+                      </div>
+                    </div>
+
+                    <div v-else key="b-delete" class="space-y-4">
+                      <p class="text-default text-lg text-center px-4">Are you sure you want to delete <strong class="text-error font-bold">{{ actionFile.filename }}</strong> from the list?</p>
+
+                      <div class="pt-4 border-t border-error/10">
+                        <UCheckbox v-model="deleteFromDisk" label="Delete file also from disk" color="error" />
+                        <div v-if="deleteFromDisk" class="mt-4 p-4 bg-error/10 border border-error/20 rounded-xl text-xs text-error shadow-inner">
+                          <UIcon name="i-lucide-alert-octagon" class="inline-block w-4 h-4 mr-1 align-text-bottom animate-pulse" />
+                          <strong class="uppercase font-bold tracking-wider">Warning:</strong> This action cannot be undone. Clicking proceed will <strong class="font-bold">permanently delete</strong> the file from your storage device.
+                        </div>
+                      </div>
+
+                      <UAlert v-if="actionError" color="error" variant="soft" :title="actionError" class="shadow-inner" />
+                    </div>
+                  </Transition>
+                </div>
+                
+                <div class="p-6 pt-4 border-t border-default/50 bg-muted/10 transition-colors duration-300" :class="modalView === 'delete' ? 'border-error/10 bg-error/5' : ''">
+                  <Transition name="fade" mode="out-in">
+                    <div v-if="modalView === 'details'" key="f-details" class="flex justify-end">
+                      <UButton color="neutral" variant="soft" class="px-6 transition-transform hover:scale-105 active:scale-95" @click="isActionModalOpen = false">Close</UButton>
+                    </div>
+                    <div v-else key="f-delete" class="flex justify-end gap-3">
+                      <UButton color="neutral" variant="soft" class="px-5 transition-transform hover:scale-105 active:scale-95" @click="cancelDelete">Cancel</UButton>
+                      <UButton color="error" class="px-5 shadow-lg shadow-error/30 transition-transform hover:scale-105 active:scale-95" :loading="isActioning" @click="performAction('delete', true, deleteFromDisk)">Proceed</UButton>
+                    </div>
+                  </Transition>
+                </div>
+              </div>
+            </div>
+          </template>
+        </UModal>
+      </div>
+    </template>
+  </UDashboardPanel>
 </template>
 
 <style scoped>

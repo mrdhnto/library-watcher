@@ -4,6 +4,7 @@ import path from 'node:path'
 import { pipeline } from 'node:stream/promises'
 import { getDb } from '../utils/db'
 import { connectedClients } from '../utils/ws-clients'
+import { insertFileFormat } from '../utils/heatmap'
 
 async function calculateHash(filePath: string): Promise<string> {
   const hash = createHash('sha256')
@@ -68,6 +69,7 @@ async function processScanJob(jobId: number, targetDir: string) {
         } else {
           const duplicateRecord = db.prepare('SELECT id FROM files WHERE hash = ?').get(fileHash) as any
           if (duplicateRecord) {
+            db.prepare('INSERT INTO scan_job_duplicates (job_id, filepath, filename) VALUES (?, ?, ?)').run(jobId, filePath, filename)
             duplicatesFound++
           }
 
@@ -75,8 +77,10 @@ async function processScanJob(jobId: number, targetDir: string) {
           if (recordByPath) {
             db.prepare('UPDATE files SET filename = ?, size = ?, hash = ?, scanned_at = CURRENT_TIMESTAMP WHERE id = ?')
               .run(filename, stats.size, fileHash, recordByPath.id)
+            insertFileFormat(recordByPath.id, filename)
           } else {
-            db.prepare('INSERT INTO files (filename, filepath, size, hash) VALUES (?, ?, ?, ?)').run(filename, filePath, stats.size, fileHash)
+            const result = db.prepare('INSERT INTO files (filename, filepath, size, hash) VALUES (?, ?, ?, ?)').run(filename, filePath, stats.size, fileHash)
+            insertFileFormat(result.lastInsertRowid as number, filename)
           }
         }
 
@@ -106,6 +110,11 @@ async function processScanJob(jobId: number, targetDir: string) {
 }
 
 export default defineEventHandler(async (event) => {
+  const user = event.context.user
+  if (!user) {
+    throw createError({ statusCode: 401, statusMessage: 'Not authenticated' })
+  }
+
   const body = await readBody(event)
   const targetDir = body?.path
   const clientId = body?.clientId
@@ -120,6 +129,18 @@ export default defineEventHandler(async (event) => {
   // Remote scan via connected client
   if (clientId) {
     const db = getDb()
+
+    // Permission check: non-admin users can only scan on their own clients
+    if (user.role !== 'admin') {
+      const client = db.prepare('SELECT id FROM clients WHERE client_id = ? AND user_id = ?').get(clientId, user.id) as any
+      if (!client) {
+        throw createError({
+          statusCode: 403,
+          statusMessage: 'You can only scan on clients bound to your account'
+        })
+      }
+    }
+
     const levelOneOnly = body?.levelOneOnly || false
     const isSync = body?.isSync || false
 
@@ -162,7 +183,14 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  // Local scan (existing logic)
+  // Local scan — admin only
+  if (user.role !== 'admin') {
+    throw createError({
+      statusCode: 403,
+      statusMessage: 'Only admins can run local scans'
+    })
+  }
+
   if (!fs.existsSync(targetDir)) {
     throw createError({
       statusCode: 404,
