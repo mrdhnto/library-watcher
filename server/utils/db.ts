@@ -100,6 +100,20 @@ export const getDb = () => {
     try {
       db.exec('ALTER TABLE client_tokens ADD COLUMN user_id INTEGER REFERENCES users(id)');
     } catch (e) { }
+    try {
+      db.exec('ALTER TABLE client_tokens ADD COLUMN claimed_hardware_id TEXT');
+    } catch (e) { }
+
+    // Client Refresh Tokens for short-lived JWT sessions
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS client_refresh_tokens (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        token TEXT NOT NULL UNIQUE,
+        client_id TEXT NOT NULL REFERENCES clients(client_id) ON DELETE CASCADE,
+        expires_at DATETIME NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
 
     // Connected remote clients
     db.exec(`
@@ -121,6 +135,9 @@ export const getDb = () => {
     } catch (e) { }
     try {
       db.exec('ALTER TABLE clients ADD COLUMN user_id INTEGER REFERENCES users(id)');
+    } catch (e) { }
+    try {
+      db.exec('ALTER TABLE clients ADD COLUMN hardware_id TEXT');
     } catch (e) { }
 
     // Auth tables
