@@ -92,7 +92,15 @@ export default defineWebSocketHandler({
 
       const payload = await verifyAccessToken(parsed.data.token)
       if (!payload) {
-        peer.send(JSON.stringify({ type: 'error', message: 'Invalid or expired access token' }))
+        // Help diagnose the common mistake of sending a registration token
+        // (what older lw-client versions did) instead of a JWT access token.
+        const registrationToken = db.prepare('SELECT id FROM client_tokens WHERE token = ? AND is_active = 1').get(parsed.data.token)
+        peer.send(JSON.stringify({
+          type: 'error',
+          message: registrationToken
+            ? 'Registration token sent instead of an access token — update lw-client'
+            : 'Invalid or expired access token'
+        }))
         peer.close()
         return
       }
